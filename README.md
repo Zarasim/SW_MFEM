@@ -4,8 +4,8 @@ Steady State Solution of 2D nonlinerar RSWs using Mixed Finite Element (MFE) met
 
 The initial condition for velocity and height field is given by:
 
-u0 = (sin(4*pi*y),0)    
-h0 = 10 + 1/4pi*cos(4*pi*y)
+u0 = (sin(4 pi y),0)    
+h0 = 10 + 1/4pi cos(4 pi y)
 
 The domain is a unit square with periodic boundary conditions. 
 
