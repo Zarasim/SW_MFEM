@@ -12,5 +12,7 @@ The domain is a unit square with periodic boundary conditions.
 Refinement of the Mesh will be realized according to h and r-adaptive strategy.
 
 h-adaptive: a priori and posteriori refinement 
+
+
 r-adaptive: 1+1D method with optimally-interpolant-L2 monitor function and optimal transport moving mesh method 
 
