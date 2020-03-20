@@ -272,6 +272,6 @@ def solver(mesh,W1,W2,dt,output = None,lump = None):
         else:
             Warning('The RK scheme diverges')
             print('Solver diverges')
-            return
+            return (u_f,h_f,error_vec)
 
     return (u_f,h_f,error_vec)

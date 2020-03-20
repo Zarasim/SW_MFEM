@@ -10,14 +10,12 @@ Apply local mesh refinement using gradient monitor function
 
 from fenics import *
 from mshr import *
-
 import numpy as np
 
 def refinement(mesh,n_ref,ref_ratio):
     
     # Compute gradient of solution 
-    source_str = 'sqrt((10 + 1/(4*pi)*cos(4*pi*x[1]))**2 + (-sin(4*pi*x[1]))**2 + (4*pi*cos(4*pi*x[1]))**2)'
-    #source_str = 'sqrt((-sin(4*pi*x[1]))**2 + (4*pi*cos(4*pi*x[1]))**2)'
+    source_str = 'sqrt((-sin(4*pi*x[1]))**2 + (4*pi*cos(4*pi*x[1]))**2)'
     
     # Define lambda function x with source_str using eval() built-in function
     source = eval('lambda x: ' + source_str)

@@ -21,6 +21,7 @@ The initial state takes the form:
 Domain: Unit square domain with periodic boundary conditions.
    
 The solution is computed in solver_SW.py 
+
 The module refinement.py returns a structured or unstructured mesh refined
 locally using a gradient-based monitor function.
 
@@ -45,9 +46,7 @@ import matplotlib.pyplot as plt
 
 # In case of refinement, start with a fixed number of nodes and
 # increase the refinement levels
-
-
-n_iter = 2
+n_iter = 3
 
 
 # Store err and dof
@@ -109,13 +108,20 @@ for i in range(n_iter):
     
     print('step ',i+1)
     
-    mesh = refinement(mesh,n_ref = 1,ref_ratio = 0.2)
+    
+    mesh = refinement(mesh,n_ref = i,ref_ratio = 0.6)
     
     ## plot refined mesh is interested
-    #fig = plt.figure(figsize=(10,10))
-    #plot(mesh)
+    fig = plt.figure(figsize=(10,10))
+    plot(mesh)
     
     dt = 0.0001
+    
+    # Compute CFL condition 
+    cfl = dt/mesh.hmin()
+    
+    if cfl > 1.0:
+        print('cfl condition is not satisfied')
 
     # Continuous Lagrange Vector function space
     E = FiniteElement('CG',mesh.ufl_cell(),1)
@@ -134,8 +140,11 @@ for i in range(n_iter):
     W2 = FunctionSpace(mesh,W_elem,constrained_domain=PeriodicBoundary())
 
     
-    # Define Mixed Function space
-    (u,h,error_vec) = solver(mesh,W1,W2,dt,lump=0)
+    # Return solution u,h at the final time step
+    # error_vec contains the deviations from initial condition over time 
+    # deviations explode for refinement >=2  
+    
+    u,h,error_vec = solver(mesh,W1,W2,dt,lump=0)
 
     
     # Plot oscillatory deviations from initial condition over time 
@@ -161,7 +170,8 @@ err_array = np.array([err,dof])
 # Compute convergence rate
 conv_rate(dof,err)
 
+
 # Save error and dof in a npy file 
-#np.save('CG2RT2DG1_ref_unstruct',err_array)        
+#np.save('SWRK4_ref_err',err_array)        
 
     
