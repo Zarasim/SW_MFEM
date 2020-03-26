@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+
 """
 Created on Sun Feb 16 10:37:11 2020
 
@@ -25,8 +27,14 @@ The solution is computed in solver_SW.py
 The module refinement.py returns a structured or unstructured mesh refined
 locally using a gradient-based monitor function.
 
-"""
 
+At each time step interpolate solution to the new mesh or solve directly onto
+the equidistributed mesh ?
+
+1st attempt: Try to solve equation directly onto the equidistributed mesh 
+from the mov_mesh module 
+
+"""
 
 # Clear all variables in workspace
 from IPython import get_ipython;   
@@ -35,28 +43,16 @@ get_ipython().magic('reset -sf')
 
 # Import modules
 from SW_RK4 import *
-from refinement import *
-
+from mov_mesh import *
 
 import matplotlib.pyplot as plt
 
 
-# Number of mesh points is N+1 for each side of the square
-#N  = np.array([8,10,15,20,25,40,60])
-
-# In case of refinement, start with a fixed number of nodes and
-# increase the refinement levels
-n_iter = 3
 
 
-# Store err and dof
-err = np.zeros(2*n_iter).reshape(n_iter,2)
-dof = np.zeros(2*n_iter).reshape(n_iter,2)
-
-
-
-# Set periodic boundary conditions 
 class PeriodicBoundary(SubDomain):
+    
+    ' Set periodic boundary conditions '
 
     # Left boundary is "target domain" G
     def inside(self, x, on_boundary):
@@ -75,12 +71,11 @@ class PeriodicBoundary(SubDomain):
         else:   # near(x[1], 1)
             y[0] = x[0]
             y[1] = x[1] - 1.
-            
-
 
                             
 def conv_rate(xvalues,err):
-    
+
+    'Compute convergence rate '    
     
     l = xvalues.shape[0]
     rate_h = np.zeros(l-1)
@@ -88,40 +83,61 @@ def conv_rate(xvalues,err):
     
     
     for i in range(l-1):
-        rate_u[i] = ln(err[i,0]/err[i+1,0])/ln(xvalues[i+1,0]/xvalues[i,0])
         rate_h[i] = ln(err[i,1]/err[i+1,1])/ln(xvalues[i+1,1]/xvalues[i,1])
+        rate_u[i] = ln(err[i,0]/err[i+1,0])/ln(xvalues[i+1,0]/xvalues[i,0])
+        
+    rate_u = np.mean(rate_u)
+    rate_h = np.mean(rate_h)
     
-    print('mean convergence rate of u is ' + str(np.mean(rate_u)))
-    print('mean convergence rate of h is ' + str(np.mean(rate_h)))
+    print('mean convergence rate of u is ' + str(rate_u))
+    print('mean convergence rate of h is ' + str(rate_h))
+    
+
+    return rate_u,rate_h
 
 
-# Generate unstructured triangular mesh 
-#domain = Rectangle(Point(0.,0.),Point(1.0,1.0))
-#mesh = generate_mesh(domain,N) 
 
 
-N  = 15
-mesh = UnitSquareMesh(N,N)
+N  = np.array([10,15,30,45,60])
+#25,40,60,80
+n_iter = N.shape[0]
 
+# Store err and dof
+err = np.zeros(2*n_iter).reshape(n_iter,2)
+dof = np.zeros(2*n_iter).reshape(n_iter,2)
+
+
+### Parameters for equidistributing mesh ###
+    
+n_equid_iter = 5
+alpha = 10
+# string expression for derivative of velocity field
+source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
+
+
+dt = 0.0005
+tf = 0.25
+    
+space_str = 'CG1RT1DG0'
 
 for i in range(n_iter):
     
     print('step ',i+1)
     
-    
-    mesh = refinement(mesh,n_ref = i,ref_ratio = 0.6)
+    mesh = UnitSquareMesh(N[i],N[i])    
+    mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
     
     ## plot refined mesh is interested
-    fig = plt.figure(figsize=(10,10))
-    plot(mesh)
-    
-    dt = 0.0001
-    
+    #plt.figure(i)
+    #plot(mesh)
+    #plt.title('Mesh_N_' + str(N[i]))
+
     # Compute CFL condition 
     cfl = dt/mesh.hmin()
     
     if cfl > 1.0:
         print('cfl condition is not satisfied')
+    
 
     # Continuous Lagrange Vector function space
     E = FiniteElement('CG',mesh.ufl_cell(),1)
@@ -142,36 +158,90 @@ for i in range(n_iter):
     
     # Return solution u,h at the final time step
     # error_vec contains the deviations from initial condition over time 
-    # deviations explode for refinement >=2  
-    
-    u,h,error_vec = solver(mesh,W1,W2,dt,lump=0)
 
-    
-    # Plot oscillatory deviations from initial condition over time 
-    plt.subplot(2,1,1)
-    plt.plot(error_vec[:,0])
-    plt.title('dev u')
-    plt.subplot(2,1,2)
-    plt.plot(error_vec[:,1])
-    plt.title('dev h')
-    
+    u,h,error_vec,scalars = solver(mesh,W1,W2,dt,tf,lump=0)
+
     dof_h = h.vector().size()
     dof_u = u.vector().size()
     
-    err[i,:] = error_vec[-2,:]        
+    err[i,:] = error_vec[-1,:]        
     
     # error with u_e and h_e, n 
     dof[i] = [dof_u,dof_h]
     
+
+#### Deviations from initial condition ####
     
     
-err_array = np.array([err,dof])
+# Save deviations 
+str_file = 'dev_N_' + str(N[-1])  + space_str
+np.save(str_file,error_vec)        
+   
+# Plot oscillatory deviations from initial condition over time 
+fig, ax = plt.subplots()
+fig.tight_layout()
+ax.plot(error_vec[:,0],label = 'u')
+ax.plot(error_vec[:,1],label = 'h')
+ax.set_xlabel('t')
+ax.legend(loc = 'best')
+plt.title('deviations')
+
+
+#### Convergence Rate ####
+
 
 # Compute convergence rate
-conv_rate(dof,err)
+rate_u,rate_h = conv_rate(dof,err)
 
 
-# Save error and dof in a npy file 
-#np.save('SWRK4_ref_err',err_array)        
+fig, ax = plt.subplots()
+ax.plot(dof[:,0],err[:,0],linestyle = '-.',label = 'u:'+ "%.4g" %rate_u)
+ax.plot(dof[:,1],err[:,1],linestyle = '-.',label = 'h:'+ "%.4g" %rate_h)
+ax.set_xlabel('dof')
+ax.set_ylabel('deviations')
 
-    
+ax.set_yscale('log')
+ax.set_xscale('log')           
+ax.legend(loc = 'best')
+plt.title('Convergence_rate')
+
+#### Physical invariants ####
+
+# Rescale scalar variables and plot deviations for last N 
+
+scalars_norm = scalars 
+
+for i in range(scalars.shape[1]):
+    scalars_norm[:,i] = (scalars[:,i] - scalars[0,i])/scalars[0,i]
+
+# Save physical quantities 
+str_file = 'scalars_N_' + str(N[-1])  + space_str
+
+
+np.save(str_file,scalars)        
+
+# Plot Scalar quantities and check for convergence
+fig = plt.figure(n_iter + 3)
+plt.subplot(2,2,1)
+plt.plot(scalars_norm[:,0])
+plt.ticklabel_format(axis="y", style="sci")
+plt.title('Energy')
+plt.subplot(2,2,2)
+plt.plot(scalars_norm[:,1])
+plt.ticklabel_format(axis="y", style="sci")
+plt.title('Enstrophy')
+plt.subplot(2,2,3)
+plt.plot(scalars_norm[:,2])
+plt.ticklabel_format(axis="y", style="sci")
+plt.title('Absolute vorticity')
+plt.subplot(2,2,4)
+plt.plot(scalars_norm[:,3])
+plt.ticklabel_format(axis="y", style="sci")
+plt.title('Mass')
+fig.tight_layout()
+
+
+
+
+
+
