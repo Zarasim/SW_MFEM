@@ -1,6 +1,6 @@
 ## README plot
 
-unform folder contain plots for uniform refinement
+uniform folder contain plots for uniform refinement
 mov_mesh folder contain plots for 1+1D moving mesh method with monitor function based on exact gradient 
 
 
