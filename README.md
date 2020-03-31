@@ -1,13 +1,37 @@
 # SW_RK4
 
-Steady State Solution of 2D nonlinerar RSWs using Mixed Finite Element (MFE) method and Runge-Kutta 4 (RK4) scheme. 
+Steady State Solution of 2D nonlinerar RSWs using Mixed Finite Element (MFE) method and Runge-Kutta 4 (RK4) scheme.
 
-The initial condition for velocity and height field is given by:
+We aim to solve the system of equations for the velocity field U = (u,v) and the height field D on a unit square domain with periodic boundary conditions.
 
-u0 = (sin(4 pi y),0)    
+u_t +  u*u_x + v*u_y - f*v + g*D_x = 0
+v_t +  u*v_x + v*v_y + f*u + g*D_y = 0
+D_t +  div(U*D) = 0
+
+The nonlinear system is rewritten in vector invariant solve in order to ensure conservation of absolute vorticity and enstrophy. In the f-plane we can obtain local conservation of absolute vorticity 
+
+q_t + div(U*q) = 0 
+
+where q is the potential vorticity, defined as q = ((\nabla)u + f)/10.0
+
+We first discretize the equations in space using the Mixed Finite Element scheme, which represents the 3 unknowns (q,U,D) in compatible FEM spaces. The integration in time is then performed with a Runge-Kutta 4 scheme. 
+
+The error introduced by the spatial discretization can be assessed by simulating a flow in geostrophic balance. The initial conditions is given by:
+
+u0 = sin(4 pi y)  v0 = 0    
 h0 = 10 + 1/4pi cos(4 pi y)
 
-The domain is a unit square with periodic boundary conditions. 
+Based on the choice of the Finite Element Spaces, the discrete solution can be polluted by spurious oscillations of different nature. The balance of velocity and pressure degrees of freedom (DOFs) dof(U) = 2*dim(D) is a necessary condition for the absence of spurious modes (Cotter and Shipton, 2012).
+
+It is known that RT spaces on triangles have a surplus of pressure degrees of freedom (DOFs) and consequently have
+spurious inertia–gravity modes. Infact the velocity space RT1 has 1.5 DOFs, while the height field space DG0 has dimension 1.0. On the other hand, BDM spaces for velocity have a deﬁcit of pressure DOFs and consequently the solution is polluted by spurious Rossby modes.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Refinement strategy:
+
 
 Refinement of the Mesh will be realized according to h and r-adaptive strategy.
 
