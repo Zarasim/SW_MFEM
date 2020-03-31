@@ -1,12 +1,12 @@
 ## README plot
 
-uniform folder contain plots for uniform refinement
+uniform folder contain plots for uniform refinement:
+
+Deviations from initial conditions are oscillatory for the pair (RT1,DG0). This is due to spurious inertia-gravity waves oscillations arising from the non-optimal ratio between DOFs of velocity and height field. 
+
+Deviations of physical invariants are of order 1e-13 for mass, absolute vorticity and esntrophy. 
+
+Energy quickly decays in few iterations and is conserved for the rest of the simulation.
+
 
 mov_mesh folder contain plots for 1+1D moving mesh method with monitor function based on exact gradient 
-
-
-Deviations from initial conditions are dampend oscillatory. Is this due to computational modes for RT1 - DG0 Function spaces ?
-
-Relative deviations of physical invariants are also oscillatory and of order 10^-7. The energy though is dissipated in the small scale.
-
-Convergence rate does not improve significantly. This might be due to the lack of FE residual upper bound for r-adaptive schemes. 
