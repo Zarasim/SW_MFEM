@@ -53,3 +53,4 @@ In the problem we are examining, we exploit the invariance of the solution along
 If a-priori knowledge of the exact solution is used in the monitor function, the equidistributing mesh is only computed at the initial iteration. If the residual is used to evaluate the monitor function, then the mesh coordinates change at every time step and interpolation of the old solution onto the new mesh is required. This step might rise issues if we want to ensure conservation of Mass, Absolute Vorticity, Energy, Enstrophy.
 
 
+Add new line
