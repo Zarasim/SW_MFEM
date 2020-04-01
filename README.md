@@ -28,7 +28,9 @@ It is known that RT spaces on triangles have a surplus of pressure degrees of fr
 spurious inertia–gravity modes. Infact the velocity space RT1 has 1.5 DOFs, while the height field space DG0 has dimension 1.0. On the other hand, BDM spaces for velocity have a deﬁcit of pressure DOFs and consequently the solution is polluted by spurious Rossby modes.
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 
 Refinement strategy:
 
