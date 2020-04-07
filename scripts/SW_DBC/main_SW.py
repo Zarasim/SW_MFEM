@@ -47,6 +47,7 @@ get_ipython().magic('reset -sf')
 # Import modules
 from SW_RK4 import *
 from mov_mesh import *
+from refinement import *
 import matplotlib.pyplot as plt
 
 
@@ -119,50 +120,61 @@ n_equid_iter = 5
 alpha = 10
 
 # string expression for derivative of velocity field
-source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
+source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2)'
 #'4*pi*np.cos(4*pi*x)'
 #'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
+
 
 dt = 0.0005
 tf = 0.1
     
-space_str = 'CG2BDMF2DG1'
+space_str = 'CG1RT1DG0'
+
 
 for i in range(n_iter):
     
     print('step ',i+1)
     
+    
     mesh = UnitSquareMesh(N[i],N[i]) 
-    #mesh = RectangleMesh.create([Point(0.0,0.0),Point(1.0,1.0)],[N[i],N[i]],CellType.Type.quadrilateral)
-    mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
+    #mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
+    
+    # Use h-refinement with adaptive time-step
+    #mesh = refinement(mesh,i,ref_ratio = None)
+    
     
     ## plot refined mesh is interested
-    #plt.figure(i)
-    #plot(mesh)
-    #plt.title('Mesh_N_' + str(N[i]))
+    plt.figure(i)
+    plot(mesh)
+    plt.title('Mesh_N_' + str(N[i]))
 
     # Compute CFL condition 
-    cfl = dt/mesh.hmin()
+    # maximum velocity is 1.0 for this problem 
     
+    cfl = dt/mesh.hmin()
     if cfl > 1.0:
         print('cfl condition is not satisfied')
     
+    
+    #dt = 1E-3*mesh.hmin()
+    #print(dt)
+    
 
     # Continuous Lagrange Vector function space
-    E = FiniteElement('CG',mesh.ufl_cell(),1)
+    E = FiniteElement('CG',mesh.ufl_cell(),2)
 
 
-    U = FiniteElement('RT',mesh.ufl_cell(),1)
+    U = FiniteElement('BDM',mesh.ufl_cell(),1)
 
     # Free surface perturbation field' function spacea
     H = FiniteElement('DG',mesh.ufl_cell(),0)
 
     
     W_elem = MixedElement([U,H])
-    W1 = FunctionSpace(mesh,W_elem,constrained_domain=PeriodicBoundary())
+    W1 = FunctionSpace(mesh,W_elem)
     
     W_elem = MixedElement([E,U])
-    W2 = FunctionSpace(mesh,W_elem,constrained_domain=PeriodicBoundary())
+    W2 = FunctionSpace(mesh,W_elem)
 
     
     # Return solution u,h at the final time step
@@ -175,8 +187,8 @@ for i in range(n_iter):
     dof_u = u.vector().size()
     dof_vort = vort.vector().size()
    
-    
-    err[i,:] = error_vec[-1,:]        
+    for j in range(3):
+        err[i,j] = np.mean(error_vec[:,j])        
     
     # error with u_e and h_e, n 
     dof[i] = [dof_u,dof_h,dof_vort]
@@ -187,7 +199,7 @@ for i in range(n_iter):
     
 # Save deviations 
 str_file = 'data/dev_N_' + str(N[-1])  + space_str
-np.save(str_file,error_vec)        
+#np.save(str_file,error_vec)        
    
 # Plot oscillatory deviations from initial condition over time 
 fig, ax = plt.subplots()
@@ -197,7 +209,7 @@ ax.plot(error_vec[:,1],label = 'h')
 #ax.plot(error_vec[:,2],label = 'q')
 ax.set_xlabel('t')
 ax.legend(loc = 'best')
-plt.title('deviations_N_' + str(N[-1])  + space_str)
+#plt.title('deviations_N_' + str(N[-1])  + space_str)
 
 
 
@@ -214,7 +226,7 @@ for i in range(scalars.shape[1]):
 str_file = 'data/scalars_N_' + str(N[-1])  + space_str
 
 
-np.save(str_file,scalars)        
+#np.save(str_file,scalars)        
 
 # Plot Scalar quantities and check for convergence
 fig = plt.figure(n_iter + 3)
@@ -245,17 +257,17 @@ fig.tight_layout()
 rate_u,rate_h,rate_q = conv_rate(dof,err)
 
 str_file = 'data/conv_N_' + str(N[-1])  + space_str
-np.save(str_file,error_vec)        
+#np.save(str_file,error_vec)        
 fig, ax = plt.subplots()
 ax.plot(np.sqrt(dof[:,0]),err[:,0],linestyle = '-.',marker = 'o',label = 'u:'+ "%.4g" %rate_u)
 ax.plot(np.sqrt(dof[:,1]),err[:,1],linestyle = '-.',marker = 'o',label = 'h:'+ "%.4g" %rate_h)
 #ax.plot(np.sqrt(dof[:,2]),err[:,2],linestyle = '-.',marker = 'o',label = 'q:'+ "%.4g" %rate_q)
 ax.set_xlabel('$\sqrt{n_{dof}}$')
-ax.set_ylabel('deviations')
+ax.set_ylabel('L2-error')
 
 ax.set_yscale('log')
 ax.set_xscale('log')           
 ax.legend(loc = 'best')
-plt.title('Convergence_rate_N_'+ str(N[-1])  + space_str)
+#plt.title('Convergence_rate_N_'+ str(N[-1])  + space_str)
 
 

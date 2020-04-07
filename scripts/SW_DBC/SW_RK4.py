@@ -61,7 +61,7 @@ def lumping(a):
 
 
 
-def weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=None):
+def weak_form(W2,sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=None):
     
     " Weak formulation of Shallow water system runge kutta method"
         
@@ -98,6 +98,12 @@ def weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=N
     A = assemble(a)
     b = assemble(L)
     
+    
+    per = Expression(('(10.0 - 4*pi*cos(4.0000000000*pi*x[1]))/(10.000000000000 + 1.0000000/(4.0000000000*pi)*cos(4.0000000000*pi*x[1]))',
+                      'sin(4.0000000000*pi*x[1])*(10.000000000000 + 1.0000000/(4.0000000000*pi)*cos(4.0000000000*pi*x[1]))','0.0'),element = W2.ufl_element())
+    bc2 = DirichletBC(W2,per, 'on_boundary')
+    bc2.apply(A,b)
+    
     solve(A,diag_old.vector(),b)
     vort_old,flux_old = diag_old.split()
     
@@ -115,6 +121,9 @@ def weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=N
     A_momentum = dt*(u_test[0]*vort_old*flux_old[1] 
                      - u_test[1]*vort_old*flux_old[0])*dx
     
+    #tau = dt/2
+    #Q_term = dt*(u_test[1]*tau*(u_old[0]*(vort_old*flux_old[0]).dx(0) + u_old[1]*(vort_old*flux_old[0]).dx(1))
+                               # - u_test[0]*tau*(u_old[0]*(vort_old*flux_old[1]).dx(0) + u_old[1]*(vort_old*flux_old[1]).dx(1)))*dx
 
     # Gradient term     
     C_momentum = dt*inner(div(u_test),g*h_old + 0.5*inner(u_old,u_old))*dx
@@ -161,7 +170,8 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     
     #f = Expression(('0.0','sin(2*pi*x[0])',
                    # '1 + 1/(4*pi)*sin(4*pi*x[1])'),element = W1.ufl_element())
-    # sin(4.0000000000*pi*x[1])
+    
+    
     
     f = Expression(('sin(4.0000000000*pi*x[1])','0.00000000000',
                     '10.000000000000 + 1.0000000/(4.0000000000*pi)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
@@ -184,8 +194,9 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
    
     solf = Function(W1)
     
-    
-    
+    periodic = Expression(("sin(4.0000000000*pi*x[1])", "0.0",'10.000000 + 1.0000000/(4.0000000000*pi)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
+    bc1 = DirichletBC(W1,periodic, 'on_boundary')
+
     scalars = np.zeros(4*(nt+1)).reshape(nt+1,4)
     error_vec = np.zeros(3*(nt+1)).reshape(nt+1,3)
      
@@ -206,78 +217,72 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         ufile << u_0,t
         hfile << h_0,t
     
-    a,L,vort_0,flux_0 = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=True)    
+    a,L,vort_0,flux_0 = weak_form(W2,sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=True)    
     
     while(it <= nt):    
 
             
         sol_n = sol_old.copy(deepcopy = True)
         
-        a,L = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)    
+        a,L = weak_form(W2,sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)    
    
         A = assemble(a)
         b = assemble(L)
+        bc1.apply(A,b)
         solve(A,sol_temp.vector(),b)
         k1.assign(sol_temp - sol_old)
         sol_old.assign(sol_n + 0.5*k1)      
         
-        a,L = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)   
+        a,L = weak_form(W2,sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)   
 
         A = assemble(a)        
         b = assemble(L)
+        bc1.apply(A,b)
         solve(A,sol_temp.vector(),b)
         k2.assign(sol_temp - sol_old)
         sol_old.assign(sol_n + 0.5*k2)
         
             
-        a,L = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)
+        a,L = weak_form(W2,sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)
         
         A = assemble(a)
         b = assemble(L)
+        bc1.apply(A,b)
         solve(A,sol_temp.vector(),b)
         k3.assign(sol_temp - sol_old)
         sol_old.assign(sol_n + k3)
         
         
-        a,L = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)   
+        a,L = weak_form(W2,sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)   
         A = assemble(a)
-            
         b = assemble(L)
+        bc1.apply(A,b)
         solve(A,sol_temp.vector(),b)
         k4.assign(sol_temp - sol_old)
         sol_old.assign(sol_n + 1/6*(k1 + 2*k2 + 2*k3 + k4))
         
         u_f,h_f = sol_old.split(deepcopy = True)
     
-        a,L,vort_f,flux_f = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=True)    
-        
-        
-        #plt.figure(1)
-        #plot(h_f.dx(0))
-        #plt.figure(2)
-        #plot(h_f.dx(1))
-       
-        #plt.figure(3)
-        #plot(u_f[0])
-        #plt.figure(4)
-        #plot(u_f[1])
+        a,L,vort_f,flux_f = weak_form(W2,sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=True)    
+     
         
         dif_u = errornorm(u_0,u_f)
         dif_h = errornorm(h_0,h_f)
         dif_q = errornorm(vort_0,vort_f)
         
-        u_paraw.vector()[:] = (u_f.vector()[:] - u_0.vector()[:])
-        h_paraw.vector()[:] = (h_f.vector()[:] - h_0.vector()[:])
+        #u_paraw.vector()[:] = (u_f.vector()[:] - u_0.vector()[:])
+        #h_paraw.vector()[:] = (h_f.vector()[:] - h_0.vector()[:])
+        
         
         
         error_vec[it,:] = dif_u,dif_h,dif_q
         scalars[it,:] = diagnostics(vort_f,u_f,flux_f,h_f)      
     
         if output:
-            u_paraw.rename('u_paraw','u')
-            h_paraw.rename('h_paraw','h')
-            ufile << u_paraw,t
-            hfile << h_paraw,t          
+            u_f.rename('u_f','u')
+            h_f.rename('h_f','h')
+            ufile << u_f,t
+            hfile << h_f,t          
 
         if dif_u < 1e-1 and dif_h < 1e-1:
             # Move to next time step
