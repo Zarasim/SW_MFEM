@@ -95,8 +95,7 @@ def conv_rate(xvalues,err):
     return rate_u,rate_h,rate_q
 
 
-N  = np.array([10,20])
-#25,30,40,50,60
+N  = np.array([10,20,40,60,70,80])
 n_iter = N.shape[0]
 
 # Store err and dof
@@ -112,8 +111,7 @@ source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 #'4*pi*np.cos(4*pi*x)'
 #'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 
-dt = 0.0005
-tf = 0.001
+tf = 0.1
     
 space_str = 'CG1RT1DG0'
 
@@ -123,6 +121,7 @@ for i in range(n_iter):
     
     mesh = UnitSquareMesh(N[i],N[i]) 
     
+    dt = 0.001*mesh.hmin()
     
     # Quadrilateral mesh does not support RT,BDM space
 

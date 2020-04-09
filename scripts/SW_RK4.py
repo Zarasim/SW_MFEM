@@ -21,8 +21,7 @@ import matplotlib.pyplot as plt
 def diagnostics(vort,u,flux,h):
 
     g = Constant(10.0)  # gravity
-    f = Constant(10.0)  # Coriolis term
-    
+  
     # Energy
     E = assemble(0.5*(h*inner(u,u) + g*h**2)*dx)
                
@@ -60,81 +59,83 @@ def lumping(a):
 
 
 
-
-def weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=None):
-    
-    " Weak formulation of Shallow water system runge kutta method"
-        
-    a = 0
-    L = 0
-    
-    g = Constant(10.0) 
-    f = Constant(10.0)
-    
-    u_old,h_old = split(sol_old)               # Function t_n
-    u,h = split(sol)                           # Function t_n+1
-    u_test,h_test = split(sol_test)            # Test function  
+def diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old):
      
-    'Find vorticity and flux, then create form with unknown (u,h)'
+   'Find vorticity and flux, then create form with unknown (u,h)'
+        
+   a = 0
+   L = 0
+    
+   f = Constant(10.0)
+    
+   u_old,h_old = split(sol_old)
 
-    #### vorticity ####
-    
-    vort,flux = split(diag_trial)
-    vort_test,flux_test = split(diag_test)
-    vort_old,flux_old = split(diag_old)
-    
-    lhs_vort = inner(vort_test,vort*h_old)*dx
-    rhs_vort = (vort_test.dx(1)*u_old[0] - vort_test.dx(0)*u_old[1])*dx + inner(vort_test,f)*dx
-    
-    #### flux  ####
 
-    lhs_flux = inner(flux,flux_test)*dx
-    rhs_flux = inner(h_old*u_old,flux_test)*dx
+   #### vorticity ####
+
+   vort,flux = split(diag_trial)
+   vort_test,flux_test = split(diag_test)
+   vort_old,flux_old = split(diag_old)
+    
+   lhs_vort = inner(vort_test,vort*h_old)*dx
+   rhs_vort = (vort_test.dx(1)*u_old[0] - vort_test.dx(0)*u_old[1])*dx + inner(vort_test,f)*dx
+    
+   #### flux  ####
+
+   lhs_flux = inner(flux,flux_test)*dx
+   rhs_flux = inner(h_old*u_old,flux_test)*dx
     
     
-    a = lhs_flux + lhs_vort
-    L = rhs_flux + rhs_vort
+   a = lhs_flux + lhs_vort
+   L = rhs_flux + rhs_vort
     
-    A = assemble(a)
-    b = assemble(L)
+   A = assemble(a)
+   b = assemble(L)
     
-    solve(A,diag_old.vector(),b)
-    vort_old,flux_old = diag_old.split()
+   solve(A,diag_old.vector(),b)
+   vort_old,flux_old = diag_old.split()
     
-    a = 0
-    L = 0
+   return vort_old,flux_old
     
-    #### Momentum equation ####
+
+
+
+def weak_form(sol_old,sol_test,vort_old,flux_old,dt):
+    
+   "weak form of Shallow Water equations in vector-invariant form"
+    
+   g = Constant(10.0)
+   
+   
+   u_old,h_old = split(sol_old)               # Function
+   u_test,h_test = split(sol_test)            # Test function  
+     
+   L = 0
+    
+   #### Momentum equation ####
        
-    # mass matrix 
-    lhs_momentum = inner(u_test,u)*dx
-    a += lhs_momentum
     
-    
-    # Advection term 
-    A_momentum = dt*(u_test[0]*vort_old*flux_old[1] 
+   # Advection term 
+   A_momentum = dt*(u_test[0]*vort_old*flux_old[1] 
                      - u_test[1]*vort_old*flux_old[0])*dx
     
 
-    # Gradient term     
-    C_momentum = dt*inner(div(u_test),g*h_old + 0.5*inner(u_old,u_old))*dx
+   # Gradient term     
+   C_momentum = dt*inner(div(u_test),g*h_old + 0.5*inner(u_old,u_old))*dx
     
-    L += C_momentum + A_momentum 
+   L += C_momentum + A_momentum 
     
     
-    #### Continuity equation #### 
-
-    lhs_continuity = (h_test*h)*dx
-    a += lhs_continuity
-    
-    rhs_continuity = -dt*(h_test*div(flux_old))*dx
-    L += rhs_continuity
+   #### Continuity equation #### 
 
     
-    if all_output:
-        return a,L,vort_old,flux_old
-    else:
-        return a,L
+   rhs_continuity = -dt*(h_test*div(flux_old))*dx
+   L += rhs_continuity
+
+    
+   return L
+
+
 
 
 
@@ -182,65 +183,76 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
      
     it = 0
     
+    
     u_0,h_0 = sol_old.split(deepcopy = True)
+    q_0,flux_0  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
     
     
-    # Compute CFL condition 
-    cfl = (max(u_0.vector()[:]))*dt/mesh.hmin()
+    # Assemble mass matrix once before starting iterations
+    a = 0
     
-    if cfl > 1.0:
-        print('cfl condition is not satisfied')
+    u_test,h_test = split(sol_test)  
+    u,h = split(sol)
     
+    lhs_momentum = inner(u_test,u)*dx
+    a += lhs_momentum
+    
+    lhs_continuity = (h_test*h)*dx
+    a += lhs_continuity
+    
+    A = assemble(a)
+        
     
     if output:
         print('Writing in pvd file')
         ufile = File('SW_paraview/sw_test_u.pvd')
         hfile = File('SW_paraview/sw_test_h.pvd')
+        qfile = File('SW_paraview/sw_test_q.pvd')
         h_0.rename('h_0','h')
         u_0.rename('u_0','u')
+        q_0.rename('q_0','q')
         ufile << u_0,t
         hfile << h_0,t
-    
-    a,L,q_0,flux_0 = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=True)    
-    
+        qfile << q_0,t
+      
+        
     while(it <= nt):    
 
-            
         sol_n = sol_old.copy(deepcopy = True)
         
-        a,L = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)    
+        q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
+        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
    
-        A = assemble(a)
         b = assemble(L)
         solve(A,k1.vector(),b)
         sol_old.assign(sol_n + 0.5*k1)      
         
-        a,L = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)   
-
-        A = assemble(a)        
+        
+        q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
+        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
+   
         b = assemble(L)
         solve(A,k2.vector(),b)
         sol_old.assign(sol_n + 0.5*k2)
         
-            
-        a,L = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)
-        
-        A = assemble(a)
+       
+        q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
+        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
+   
         b = assemble(L)
         solve(A,k3.vector(),b)
         sol_old.assign(sol_n + k3)
         
-        
-        a,L = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt)   
-        A = assemble(a)
-            
+        q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
+        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
+      
+
         b = assemble(L)
         solve(A,k4.vector(),b)
         sol_old.assign(sol_n + 1/6*(k1 + 2*k2 + 2*k3 + k4))
         
         u_f,h_f = sol_old.split(deepcopy = True)
-    
-        a,L,q_f,flux_f = weak_form(sol_old,sol_test,sol,diag_test,diag_trial,diag_old,dt,all_output=True)    
+        q_f,flux_f  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
         
         
         dif_u = errornorm(u_0,u_f)
@@ -249,13 +261,14 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         
         devs_vec[it,:] = dif_u,dif_h,dif_q
         scalars[it,:] = diagnostics(q_f,u_f,flux_f,h_f)      
+          
+        # Compute CFL condition 
+        cfl = (max(u_0.vector()[:]))*dt/mesh.hmin()
     
-        if output:
-            u_f.rename('u_f','u')
-            h_f.rename('h_f','h')
-            ufile << u_f,t
-            hfile << h_f,t          
-
+        if cfl > 1.0:
+            print('cfl condition is not satisfied')
+            
+        
         if dif_u < 1e-1 and dif_h < 1e-1:
             # Move to next time step
             t += dt
@@ -263,6 +276,17 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         else:
             Warning('The RK scheme diverges')
             print('Solver diverges')
-            return u_f,h_f,devs_vec,scalars
+            return 
+        
+        
+        if output:
+            u_f.rename('u_f','u')
+            h_f.rename('h_f','h')
+            q_f.rename('q_f','q')
+            ufile << u_f,t
+            hfile << h_f,t  
+            qfile << q_f,t          
+
+
 
     return devs_vec,scalars

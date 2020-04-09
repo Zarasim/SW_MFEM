@@ -81,7 +81,7 @@ def conv_rate(xvalues,err):
 
 
 #his step might rise issues if we want to ensure conservation of Mass, Absolute Vorticity, Energy, Enstrophy.
-N  = np.array([10,20,25,30,40,50,60])
+N  = np.array([30])
 n_iter = N.shape[0]
 
 # Store err and dof
@@ -151,7 +151,7 @@ for i in range(n_iter):
     # Return solution u,h at the final time step
     # error_vec contains the deviations from initial condition over time 
 
-    u,h,vort,error_vec,scalars = solver(mesh,W1,W2,dt,tf,output=0,lump=0)
+    u,h,vort,error_vec,scalars = solver(mesh,W1,W2,dt,tf,output=1,lump=0)
 
     dof_h = h.vector().size()
     dof_u = u.vector().size()

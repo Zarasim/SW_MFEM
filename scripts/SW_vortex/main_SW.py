@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
 """
 Created on Sun Feb 16 10:37:11 2020
 
@@ -44,6 +43,8 @@ get_ipython().magic('reset -sf')
 from SW_RK4 import *
 from mov_mesh import *
 import matplotlib.pyplot as plt
+import os
+
 
 class PeriodicBoundary(SubDomain):
     
@@ -68,13 +69,7 @@ class PeriodicBoundary(SubDomain):
             y[1] = x[1] - 1.
 
 
-
-N  = 30
-
-# Store err and dof
-err = np.zeros(3*n_iter).reshape(n_iter,3)
-dof = np.zeros(3*n_iter).reshape(n_iter,3)
-
+N  = 50
 
 ### Parameters for equidistributing mesh ###    
 n_equid_iter = 5
@@ -85,8 +80,8 @@ source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 #'4*pi*np.cos(4*pi*x)'
 #'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 
-dt = 0.0005
-tf = 0.1
+dt = 0.001
+tf = 1.0
     
 space_str = 'CG1RT1DG0'
 
@@ -100,9 +95,9 @@ mesh = UnitSquareMesh(N,N)
     
 
 # Continuous Lagrange Vector function space
-E = FiniteElement('CG',mesh.ufl_cell(),1)
+E = FiniteElement('CG',mesh.ufl_cell(),2)
     
-U = FiniteElement('RT',mesh.ufl_cell(),1)
+U = FiniteElement('BDM',mesh.ufl_cell(),1)
     
 # Free surface perturbation field' function spacea
 H = FiniteElement('DG',mesh.ufl_cell(),0)
@@ -117,15 +112,39 @@ W2 = FunctionSpace(mesh,W_elem,constrained_domain=PeriodicBoundary())
     
 # error_vec contains the deviations from initial condition over time 
 
-error_vec,scalars = solver(mesh,W1,W2,dt,tf,output=1,lump=0)
+error_vec,scalars,L2_dev = solver(mesh,W1,W2,dt,tf,output=1,lump=0)
 
 
-#### Deviations from initial condition ####
-    
+rel_path = os.getcwd()
+pathset = os.path.join(rel_path,'data')
+
+if not(os.path.exists(pathset)):
+    os.mkdir(pathset)
+
+
+
+####  L2-norm deviation from geostrophic balance  ####
+
+
+output_file = 'L2_geostr_N_' + str(N)  + space_str
+np.save(os.path.join(pathset, output_file),L2_dev)        
+ 
+  
+# Plot oscillatory deviations from initial condition over time 
+fig, ax = plt.subplots()
+fig.tight_layout()
+ax.plot(L2_dev)
+
+ax.set_xlabel('t')
+ax.legend(loc = 'best')
+
+
+#### Deviations from initial state ####
+        
     
 # Save deviations 
-str_file = 'data/dev_N_' + str(N[-1])  + space_str
-np.save(str_file,error_vec)        
+output_file = 'dev_N_' + str(N)  + space_str
+np.save(os.path.join(pathset, output_file),error_vec)        
  
   
 # Plot oscillatory deviations from initial condition over time 
@@ -150,12 +169,12 @@ for i in range(scalars.shape[1]):
     scalars_norm[:,i] = (scalars[:,i] - scalars[0,i])/scalars[0,i]
 
 # Save physical quantities 
-str_file = 'data/scalars_N_' + str(N[-1])  + space_str
+output_file = 'scalars_N_' + str(N)  + space_str
+np.save(os.path.join(pathset, output_file),scalars)        
+ 
 
-
-np.save(str_file,scalars)        
 # Plot Scalar quantities
-fig = plt.figure(n_iter + 3)
+fig = plt.figure(3)
 plt.subplot(2,2,1)
 plt.plot(scalars_norm[:,0])
 plt.ticklabel_format(axis="y", style="sci")

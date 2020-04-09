@@ -31,9 +31,9 @@ class MyExpression(UserExpression):
             
             dy = x[1] - self.ya
             
-            value[0] =  -dy*(exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) + exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))/(2.0*pi*self.sigma**2)
-            value[1] = (dxa*exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) + dxb*exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))/(2.0*pi*self.sigma**2)
-            value[2] = (1.0/(2.0*pi*self.sigma))*(exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) +  exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))
+            value[0] =  -(1.0/100.0)*dy*(exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) + exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))/(2.0*pi*self.sigma**2)
+            value[1] = (1.0/100.0)*(dxa*exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) + dxb*exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))/(2.0*pi*self.sigma**2)
+            value[2] = 10.0  + (1.0/100.0)*(1.0/(2.0*pi*self.sigma))*(exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) +  exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))
 
             
     def value_shape(self):
@@ -44,8 +44,7 @@ class MyExpression(UserExpression):
 def diagnostics(vort,u,flux,h):
 
     g = Constant(10.0)  # gravity
-    f = Constant(10.0)  # Coriolis term
-    
+ 
     # Energy
     E = assemble(0.5*(h*inner(u,u) + g*h**2)*dx)
                
@@ -89,13 +88,10 @@ def diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old):
    a = 0
    L = 0
     
-   g = Constant(10.0) 
    f = Constant(10.0)
     
-   u_old,h_old = split(sol_old)               # Function t_n
-   u,h = split(sol)                           # Function t_n+1
-   u_test,h_test = split(sol_test)            # Test function  
-     
+   u_old,h_old = split(sol_old)
+
 
    #### vorticity ####
 
@@ -126,41 +122,41 @@ def diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old):
 
 
 
-def weak_form(sol_old,sol_test,sol,vort_old,flux_old,dt):
+def weak_form(sol_old,sol_test,vort_old,flux_old,dt):
     
-    "weak form of Shallow Water equations in vector-invariant form"
+   "weak form of Shallow Water equations in vector-invariant form"
     
-    a = 0
-    L = 0
+   f = Constant(10.0)
+   g = Constant(10.0)
+   
+   
+   u_old,h_old = split(sol_old)               # Function
+   u_test,h_test = split(sol_test)            # Test function  
+     
+   L = 0
     
-    #### Momentum equation ####
+   #### Momentum equation ####
        
-    # mass matrix 
-    lhs_momentum = inner(u_test,u)*dx
-    a += lhs_momentum
     
-    
-    # Advection term 
-    A_momentum = dt*(u_test[0]*vort_old*flux_old[1] 
+   # Advection term 
+   A_momentum = dt*(u_test[0]*vort_old*flux_old[1] 
                      - u_test[1]*vort_old*flux_old[0])*dx
     
 
-    # Gradient term     
-    C_momentum = dt*inner(div(u_test),g*h_old + 0.5*inner(u_old,u_old))*dx
+   # Gradient term     
+   C_momentum = dt*inner(div(u_test),g*h_old + 0.5*inner(u_old,u_old))*dx
     
-    L += C_momentum + A_momentum 
+   L += C_momentum + A_momentum 
     
     
-    #### Continuity equation #### 
-
-    lhs_continuity = (h_test*h)*dx
-    a += lhs_continuity
-    
-    rhs_continuity = -dt*(h_test*div(flux_old))*dx
-    L += rhs_continuity
+   #### Continuity equation #### 
 
     
-    return a,L
+   rhs_continuity = -dt*(h_test*div(flux_old))*dx
+   L += rhs_continuity
+
+    
+   return L
 
 
 
@@ -184,7 +180,7 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     
     
     # Set initial values for velocity and height field 
-    expr = MyExpression(sigma = 0.005,xa = 0.4 ,xb = 0.6,yc = 0.5,element = W1.ufl_element())
+    expr = MyExpression(sigma = 0.01,xa = 0.4 ,xb = 0.6,yc = 0.5,element = W1.ufl_element())
    
     sol_old.interpolate(expr)
     
@@ -203,13 +199,29 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     
     scalars = np.zeros(4*(nt+1)).reshape(nt+1,4)
     error_vec = np.zeros(3*(nt+1)).reshape(nt+1,3)
+    L2_dev = np.zeros(nt+1)
      
     it = 0
     
 
     q_0,flux_0  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
     u_0,h_0 = sol_old.split(deepcopy = True)
-
+    
+    
+        
+    # Assemble mass matrix once before starting iterations
+    a = 0
+    
+    u_test,h_test = split(sol_test)  
+    u,h = split(sol)
+    
+    lhs_momentum = inner(u_test,u)*dx
+    a += lhs_momentum
+    
+    lhs_continuity = (h_test*h)*dx
+    a += lhs_continuity
+    
+    A = assemble(a)
         
     if output:
         print('Writing in pvd file')
@@ -222,35 +234,32 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         sol_n = sol_old.copy(deepcopy = True)
         
         q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        a,L = weak_form(sol_old,sol_test,sol,vort_old,flux_old,dt)    
+        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
    
-        A = assemble(a)
         b = assemble(L)
         solve(A,k1.vector(),b)
         sol_old.assign(sol_n + 0.5*k1)      
         
         
         q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        a,L = weak_form(sol_old,sol_test,sol,vort_old,flux_old,dt)    
+        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
    
-        A = assemble(a)        
         b = assemble(L)
         solve(A,k2.vector(),b)
         sol_old.assign(sol_n + 0.5*k2)
         
        
         q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        a,L = weak_form(sol_old,sol_test,sol,vort_old,flux_old,dt)    
+        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
    
-        A = assemble(a)
         b = assemble(L)
         solve(A,k3.vector(),b)
         sol_old.assign(sol_n + k3)
         
         q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        a,L = weak_form(sol_old,sol_test,sol,vort_old,flux_old,dt)    
+        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
       
-        A = assemble(a)      
+
         b = assemble(L)
         solve(A,k4.vector(),b)
         sol_old.assign(sol_n + 1/6*(k1 + 2*k2 + 2*k3 + k4))
@@ -264,26 +273,29 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         
         
         error_vec[it,:] = dif_q,dif_u,dif_h
-        scalars[it,:] = diagnostics(q_f,u_f,flux_f,h_f)      
+        scalars[it,:] = diagnostics(q_f,u_f,flux_f,h_f)  
+        
+        # L2 -  Deviations from geostrophic balance
+        # -f*v + g*H_x = 0
+        # f*u + g*H_y = 0
+        
+        L2_dev[it] = assemble((-u_f[1] + h_f.dx(0))*(-u_f[1] + h_f.dx(0))*dx) + assemble((u_f[0] + h_f.dx(1))*(u_f[0] + h_f.dx(1))*dx)
     
+        # Compute CFL condition 
+        cfl = (max(u_0.vector()[:]))*dt/mesh.hmin()
+    
+        if cfl > 1.0:
+            print('cfl condition is not satisfied')
+            return
+        
+        if dif_u < 10**-1 and dif_h < 10**-1:
+            # Move to next time step
+            t += dt
+            it = it + 1
+        
+        
         if output:
             q_f.rename('q_f','q')
             qfile << q_f,t
-            
-        
-    # Compute CFL condition 
-    cfl = (max(u_0.vector()[:]))*dt/mesh.hmin()
-    
-    if cfl > 1.0:
-        print('cfl condition is not satisfied')
-        return
-    
-    if dif_u < 1e-1 and dif_h < 1e-1:
-        # Move to next time step
-        t += dt
-        it = it + 1
-    else:
-            print('Solver diverges')
-            return 
 
-    return error_vec,scalars
+    return error_vec,scalars,L2_dev
