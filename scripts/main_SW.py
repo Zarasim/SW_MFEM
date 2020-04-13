@@ -40,6 +40,7 @@ get_ipython().magic('reset -sf')
 # Import modules
 from SW_RK4 import *
 from mov_mesh import *
+from mshr import *
 import matplotlib.pyplot as plt
 import os 
 
@@ -95,13 +96,15 @@ def conv_rate(xvalues,err):
     return rate_u,rate_h,rate_q
 
 
-N  = np.array([10,20,40,60,70,80])
+N  = np.array([40,50,60,70,80])
+
 n_iter = N.shape[0]
 
 # Store err and dof
 devs = np.zeros(3*n_iter).reshape(n_iter,3)
 dof = np.zeros(3*n_iter).reshape(n_iter,3)
-
+scal_dev = np.zeros(4*n_iter).reshape(n_iter,4)
+dof_tot = np.zeros(n_iter)
 
 ### Parameters for equidistributing mesh ###    
 n_equid_iter = 5
@@ -111,7 +114,8 @@ source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 #'4*pi*np.cos(4*pi*x)'
 #'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 
-tf = 0.1
+dt = 0.0005
+tf = 0.01
     
 space_str = 'CG1RT1DG0'
 
@@ -121,19 +125,27 @@ for i in range(n_iter):
     
     mesh = UnitSquareMesh(N[i],N[i]) 
     
-    dt = 0.001*mesh.hmin()
     
-    # Quadrilateral mesh does not support RT,BDM space
-
-        #mesh = RectangleMesh.create([Point(0.0,0.0),Point(1.0,1.0)],[N[i],N[i]],CellType.Type.quadrilateral)
-        #mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
+    ## Quadrilateral mesh does not support RT,BDM space
+    #mesh = RectangleMesh.create([Point(0.0,0.0),Point(1.0,1.0)],[N[i],N[i]],CellType.Type.quadrilateral)
     
+    ## Generate unstructured mesh with Delaunay triangulation 
+    #domain = Rectangle(Point(0.,0.),Point(1.,1.))
+    #mesh = generate_mesh(domain,N[i],'cgal') 
+    
+    
+    ## Equidistribute mesh
+    #mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
+       
     # plot mesh refined in module refinement.py 
     
-        #plt.figure(i)
-        #plot(mesh)
-        #plt.title('Mesh_N_' + str(N[i]))
     
+    #plt.figure(i)
+    #plot(mesh)
+    #plt.title('Mesh_N_')
+              
+    ## Change time step               
+    #dt = 0.001*mesh.hmin()
     
     E = FiniteElement('CG',mesh.ufl_cell(),1)
 
@@ -153,17 +165,20 @@ for i in range(n_iter):
     # scalars contains deviations of physical quantities over time 
     devs_vec,scalars = solver(mesh,W1,W2,dt,tf,output=0,lump=0)
 
-    #dof_tot = W1.dim()
+    dof_tot[i] = W1.dim()
     dof_u = W1.sub(0).dim()
     dof_h = W1.sub(1).dim()
     dof_q = W2.sub(0).dim()
     
     # error with u_e and h_e, n 
     dof[i] = [dof_u,dof_h,dof_q]
-      
+    
+    scal_dev[i,:] = abs(scalars[-1,:] - scalars[0,:])
+    
+    
     for j in range(3):
-        devs[i,j] = np.mean(devs_vec[:,j])       
-   
+        #devs[i,j] = np.mean(devs_vec[:,j])       
+        devs[i,j] = devs_vec[-1,j]
     
 rel_path = os.getcwd()
 pathset = os.path.join(rel_path,'Data')
@@ -250,3 +265,21 @@ ax.set_ylabel('deviations')
 ax.set_yscale('log')
 ax.set_xscale('log')           
 ax.legend(loc = 'best')
+
+
+
+###########################
+
+
+
+fig, ax = plt.subplots()
+ax.plot(np.sqrt(dof_tot),scal_dev[:,0],linestyle = '-.',marker = 'o')
+ax.plot(np.sqrt(dof_tot),scal_dev[:,1],linestyle = '-.',marker = 'o')
+#ax.plot(np.sqrt(dof[:,2]),devs[:,2],linestyle = '-.',marker = 'o',label = 'q:'+ "%.4g" %rate_q)
+ax.set_xlabel('$\sqrt{n_{dof}}$')
+ax.set_ylabel('deviations')
+
+ax.set_yscale('log')
+ax.set_xscale('log')           
+ax.legend(loc = 'best')
+

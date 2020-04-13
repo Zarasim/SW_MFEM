@@ -15,6 +15,7 @@ from dolfin import *
 import numpy as np
 import matplotlib.pyplot as plt
 
+#form_compiler_parameters = {"quadrature_degree": 6}
 
 
 
@@ -159,10 +160,14 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     
     
     # Set initial values for velocity and height field 
-    expr = Expression(('sin(4.0000000000*pi*x[1])','0.00000000000',
-                    '10.000000000000 + 1.0000000/(4.0000000000*pi)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
+    # divide by 1000
+    expr = Expression(('sin(4.0000000000*pi*x[1])/1000.0','0.00000000000',
+                    '10.000000000000 + 1.0000000/(4.0000000000*pi*1000.0)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
     
    
+    #expr = Expression(('(1/1000.0)*sin(2*pi*x[0])*sin(x[1])','(1/1000.0)*2*pi*cos(2*pi*x[0])*cos(x[1])','10.0 + (1/1000.0)*sin(2*pi*x[0])*cos(x[1])'),element = W1.ufl_element())
+    #expr = Expression(('0.0','sin(2*pi*x[0])','1.0 + (1/4*pi)*sin(4*pi*x[1])'),element = W1.ufl_element())
+    
     sol_old.interpolate(expr)
     
     t = 0.0
@@ -201,7 +206,7 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     a += lhs_continuity
     
     A = assemble(a)
-        
+    
     
     if output:
         print('Writing in pvd file')
