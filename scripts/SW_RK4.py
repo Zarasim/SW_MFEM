@@ -161,8 +161,8 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     
     # Set initial values for velocity and height field 
     # divide by 1000
-    expr = Expression(('sin(4.0000000000*pi*x[1])/1000.0','0.00000000000',
-                    '10.000000000000 + 1.0000000/(4.0000000000*pi*1000.0)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
+    expr = Expression(('sin(4.0000000000*pi*x[1])','0.00000000000',
+                    '10.000000000000 + 1.0000000/(4.0000000000*pi)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
     
    
     #expr = Expression(('(1/1000.0)*sin(2*pi*x[0])*sin(x[1])','(1/1000.0)*2*pi*cos(2*pi*x[0])*cos(x[1])','10.0 + (1/1000.0)*sin(2*pi*x[0])*cos(x[1])'),element = W1.ufl_element())

@@ -96,7 +96,7 @@ def conv_rate(xvalues,err):
     return rate_u,rate_h,rate_q
 
 
-N  = np.array([40,50,60,70,80])
+N  = np.array([15,20,30,40,50,60])
 
 n_iter = N.shape[0]
 
@@ -115,7 +115,7 @@ source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 #'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 
 dt = 0.0005
-tf = 0.01
+tf = 0.5
     
 space_str = 'CG1RT1DG0'
 
@@ -123,15 +123,15 @@ for i in range(n_iter):
     
     print('step ',i+1)
     
-    mesh = UnitSquareMesh(N[i],N[i]) 
+    #mesh = UnitSquareMesh(N[i],N[i]) 
     
     
     ## Quadrilateral mesh does not support RT,BDM space
     #mesh = RectangleMesh.create([Point(0.0,0.0),Point(1.0,1.0)],[N[i],N[i]],CellType.Type.quadrilateral)
     
     ## Generate unstructured mesh with Delaunay triangulation 
-    #domain = Rectangle(Point(0.,0.),Point(1.,1.))
-    #mesh = generate_mesh(domain,N[i],'cgal') 
+    domain = Rectangle(Point(0.,0.),Point(1.,1.))
+    mesh = generate_mesh(domain,N[i],'cgal') 
     
     
     ## Equidistribute mesh
@@ -145,7 +145,8 @@ for i in range(n_iter):
     #plt.title('Mesh_N_')
               
     ## Change time step               
-    #dt = 0.001*mesh.hmin()
+    #dt = 0.1*mesh.hmin()*mesh.hmin()
+    print(dt)
     
     E = FiniteElement('CG',mesh.ufl_cell(),1)
 
@@ -177,8 +178,9 @@ for i in range(n_iter):
     
     
     for j in range(3):
-        #devs[i,j] = np.mean(devs_vec[:,j])       
-        devs[i,j] = devs_vec[-1,j]
+        
+        devs[i,j] = np.mean(devs_vec[300:,j])       
+        
     
 rel_path = os.getcwd()
 pathset = os.path.join(rel_path,'Data')
@@ -269,7 +271,6 @@ ax.legend(loc = 'best')
 
 
 ###########################
-
 
 
 fig, ax = plt.subplots()
