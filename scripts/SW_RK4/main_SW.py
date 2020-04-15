@@ -98,10 +98,10 @@ def conv_rate(xvalues,err):
 
 # For Delaunay tesselation do not use too small number of the solver diverges
 
-N  = np.array([12,15,21,25,28])
+N  = np.array([10,15,20,40,60])
 
-#12,15,17,20,25,28
-# ,20,30,40,50,60
+# N for unstructured mesh
+#12,15,21,25,28
 
 n_iter = N.shape[0]
 
@@ -120,7 +120,7 @@ source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 #'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 
 dt = 0.0005
-tf = 1.0
+tf = 0.3
     
 space_str = 'CG1RT1DG0'
 
@@ -128,26 +128,24 @@ for i in range(n_iter):
     
     print('step ',i+1)
     
-    #mesh = UnitSquareMesh(N[i],N[i]) 
+    mesh = UnitSquareMesh(N[i],N[i]) 
     
     
     ## Quadrilateral mesh does not support RT,BDM space
     #mesh = RectangleMesh.create([Point(0.0,0.0),Point(1.0,1.0)],[N[i],N[i]],CellType.Type.quadrilateral)
     
     ## Generate unstructured mesh with Delaunay triangulation 
-    domain = Rectangle(Point(0.,0.),Point(1.,1.))
-    mesh = generate_mesh(domain,N[i],'cgal') 
+    #domain = Rectangle(Point(0.,0.),Point(1.,1.))
+    #mesh = generate_mesh(domain,N[i],'cgal') 
     
     
     ## Equidistribute mesh
     #mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
        
     # plot mesh refined in module refinement.py 
-    
-    
-    plt.figure(i)
-    plot(mesh)
-    plt.title('Mesh_N_' + str(N[i]))
+    #plt.figure(i)
+    #plot(mesh)
+    #plt.title('Mesh_N_' + str(N[i]))
              
     
     E = FiniteElement('CG',mesh.ufl_cell(),1)
@@ -183,9 +181,9 @@ for i in range(n_iter):
     
     for j in range(3):
         
-        nn = int(0.15/dt)
-        #devs[i,j] = np.mean(devs_vec[nn:,j])       
-        devs[i,j] = np.mean(devs_vec[:,j])       
+        nn = int(0.13/dt)
+        devs[i,j] = np.mean(devs_vec[nn:,j])       
+        #devs[i,j] = np.mean(devs_vec[:,j])       
         
     
 rel_path = os.getcwd()
@@ -241,10 +239,12 @@ plt.subplot(2,2,3)
 plt.plot(scalars_norm[:,2])
 plt.ticklabel_format(axis="y", style="sci")
 plt.title('Absolute vorticity')
+plt.xlabel('it')
 plt.subplot(2,2,4)
 plt.plot(scalars_norm[:,3])
 plt.ticklabel_format(axis="y", style="sci")
 plt.title('Mass')
+plt.xlabel('it')
 fig.tight_layout()
 
 

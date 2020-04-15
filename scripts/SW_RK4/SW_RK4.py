@@ -101,7 +101,7 @@ def diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old):
 
 
 
-def weak_form(sol_old,sol_test,vort_old,flux_old,dt):
+def weak_form(sol_old,sol_test,vort_old,flux_old,S,dt):
     
    "weak form of Shallow Water equations in vector-invariant form"
     
@@ -110,6 +110,7 @@ def weak_form(sol_old,sol_test,vort_old,flux_old,dt):
    
    u_old,h_old = split(sol_old)               # Function
    u_test,h_test = split(sol_test)            # Test function  
+   S1, S2, S3 = split(S)
      
    L = 0
     
@@ -123,21 +124,19 @@ def weak_form(sol_old,sol_test,vort_old,flux_old,dt):
 
    # Gradient term     
    C_momentum = dt*inner(div(u_test),g*h_old + 0.5*inner(u_old,u_old))*dx
-    
-   L += C_momentum + A_momentum 
+   
+   
+   L += C_momentum + A_momentum + dt*(u_test[0]*S1 + u_test[1]*S2)*dx
     
     
    #### Continuity equation #### 
 
     
-   rhs_continuity = -dt*(h_test*div(flux_old))*dx
+   rhs_continuity = -dt*(h_test*div(flux_old))*dx + dt*h_test*S3*dx
    L += rhs_continuity
 
     
    return L
-
-
-
 
 
 def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
@@ -161,12 +160,14 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     
     # Set initial values for velocity and height field 
     # divide by 1000
-    expr = Expression(('sin(4.0000000000*pi*x[1])/1000','0.00000000000',
-                    '10.000000000000 + 1.0000000/(4.0000000000*pi*1000)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
+    #expr = Expression(('sin(4.0000000000*pi*x[1])/1000','0.00000000000',
+     #               '10.000000000000 + 1.0000000/(4.0000000000*pi*1000)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
     
    
     #expr = Expression(('(1/1000.0)*sin(2*pi*x[0])*sin(x[1])','(1/1000.0)*2*pi*cos(2*pi*x[0])*cos(x[1])','10.0 + (1/1000.0)*sin(2*pi*x[0])*cos(x[1])'),element = W1.ufl_element())
     #expr = Expression(('0.0','sin(2*pi*x[0])','1.0 + (1/4*pi)*sin(4*pi*x[1])'),element = W1.ufl_element())
+    expr = Expression(('sin(pi*x[1])','0.0000000','10.000 + sin(2*pi*x[0])*sin(pi*x[1])'),element = W1.ufl_element())
+    
     
     sol_old.interpolate(expr)
     
@@ -182,6 +183,20 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     k3 = Function(W1) 
     k4 = Function(W1)
    
+    
+    
+    Z = FiniteElement('CG',mesh.ufl_cell(),2)
+    W_elem = MixedElement([Z,Z,Z])
+    Z = FunctionSpace(mesh,W_elem)
+    
+    
+    S = Function(Z)
+    
+    S_exp = Expression(('10.0*2*pi*cos(2*pi*x[0])*sin(pi*x[1])',
+                        '10.0*sin(pi*x[1]) + 10.0*sin(2*pi*x[0])*pi*cos(pi*x[1])',
+                        '2*pi*cos(2*pi*x[0])*sin(pi*x[1])*sin(pi*x[1])'),degree=5)
+    
+    S.interpolate(S_exp)
     
     scalars = np.zeros(4*(nt+1)).reshape(nt+1,4)
     devs_vec = np.zeros(3*(nt+1)).reshape(nt+1,3)
@@ -226,7 +241,7 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         sol_n = sol_old.copy(deepcopy = True)
         
         q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
+        L = weak_form(sol_old,sol_test,q_old,flux_old,S,dt)    
    
         b = assemble(L)
         solve(A,k1.vector(),b)
@@ -234,7 +249,7 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         
         
         q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
+        L = weak_form(sol_old,sol_test,q_old,flux_old,S,dt)    
    
         b = assemble(L)
         solve(A,k2.vector(),b)
@@ -242,14 +257,14 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         
        
         q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
+        L = weak_form(sol_old,sol_test,q_old,flux_old,S,dt)    
    
         b = assemble(L)
         solve(A,k3.vector(),b)
         sol_old.assign(sol_n + k3)
         
         q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        L = weak_form(sol_old,sol_test,q_old,flux_old,dt)    
+        L = weak_form(sol_old,sol_test,q_old,flux_old,S,dt)    
       
 
         b = assemble(L)
@@ -280,7 +295,7 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
             print('cfl condition is not satisfied')
             
         
-        if dif_u/norm(u_0) < 1 and dif_h/norm(h_0) < 1:
+        if dif_u/norm(u_0) < 1e-1 and dif_h/norm(h_0) < 1e-1:
             # Move to next time step
             t += dt
             it = it + 1
