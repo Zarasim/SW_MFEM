@@ -268,7 +268,15 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         scalars[it,:] = diagnostics(q_f,u_f,flux_f,h_f)      
           
         # Compute CFL condition 
-        cfl = (max(u_0.vector()[:]))*dt/mesh.hmin()
+        max_u = max(u_0.vector()[:])
+        cfl = (max_u)*dt/mesh.hmin()
+        
+        
+        # Adapt the time step in order to have CFL condition equal to 0.9
+        print('time step ')
+        dt  = 0.1*mesh.hmin()/max_u 
+        
+        print(dt)
     
         if cfl > 1.0:
             print('cfl condition is not satisfied')

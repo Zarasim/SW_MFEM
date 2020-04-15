@@ -38,7 +38,8 @@ get_ipython().magic('reset -sf')
 
 
 # Import modules
-from SW_RK4 import *
+from SW_midpoint import *
+
 from mov_mesh import *
 from mshr import *
 import matplotlib.pyplot as plt
@@ -96,7 +97,9 @@ def conv_rate(xvalues,err):
     return rate_u,rate_h,rate_q
 
 
-N  = np.array([15,20,30,40,50,60])
+N  = np.array([7,10,12,15,17])
+
+# ,20,30,40,50,60
 
 n_iter = N.shape[0]
 
@@ -140,13 +143,10 @@ for i in range(n_iter):
     # plot mesh refined in module refinement.py 
     
     
-    #plt.figure(i)
-    #plot(mesh)
-    #plt.title('Mesh_N_')
-              
-    ## Change time step               
-    #dt = 0.1*mesh.hmin()*mesh.hmin()
-    print(dt)
+    plt.figure(i)
+    plot(mesh)
+    plt.title('Mesh_N_'+ str(N[i]))
+             
     
     E = FiniteElement('CG',mesh.ufl_cell(),1)
 
@@ -154,22 +154,21 @@ for i in range(n_iter):
 
     H = FiniteElement('DG',mesh.ufl_cell(),0)
 
-    
-    W_elem = MixedElement([U,H])
-    W1 = FunctionSpace(mesh,W_elem,constrained_domain=PeriodicBoundary())
-    
-    W_elem = MixedElement([E,U])
-    W2 = FunctionSpace(mesh,W_elem,constrained_domain=PeriodicBoundary())
-
+       
+    # Define Mixed Function space
+    W_elem = MixedElement([E,U,U,H])
+    W = FunctionSpace(mesh,W_elem,constrained_domain=PeriodicBoundary())    
     
     # devs contains deviations from initial condition over time
     # scalars contains deviations of physical quantities over time 
-    devs_vec,scalars = solver(mesh,W1,W2,dt,tf,output=0,lump=0)
+    #devs_vec,scalars = solver(mesh,W1,W2,dt,tf,output=0,lump=0)
 
-    dof_tot[i] = W1.dim()
-    dof_u = W1.sub(0).dim()
-    dof_h = W1.sub(1).dim()
-    dof_q = W2.sub(0).dim()
+    devs_vec,scalars = solver(mesh,W,dt,tf,output = None,lump = None)
+    
+    #dof_tot[i] = W1.dim()
+    dof_u = W.sub(0).dim()
+    dof_h = W.sub(3).dim()
+    dof_q = W.sub(0).dim()
     
     # error with u_e and h_e, n 
     dof[i] = [dof_u,dof_h,dof_q]

@@ -1,5 +1,5 @@
 
-Solve 2D Shallow-water equation are solved in unit sqare plane with periodic boundary conditions.
+Solve 2D Shallow-water equation in unit square plane with periodic boundary conditions.
 
 The initial condition is given by:
 
@@ -17,6 +17,9 @@ The Coriolis and gravity term are given respectively by:
 f = g = 10.0 
 
 
+The time step is adapted in order to mantain the CFL condition equal to 0.9.
+
+The domain is discretized with a right-biased triangular mesh.
 
 The Rossby number is Ro = U/Lf = 10^-4. Therefore the system is dominated by Coriolis forces and inertial forces can be neglected.
 
