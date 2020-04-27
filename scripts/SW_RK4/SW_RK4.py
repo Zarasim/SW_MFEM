@@ -145,6 +145,11 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     
     # (u,h): sol  (vort,flux): diag
     
+    CG_u = VectorFunctionSpace(mesh,'CG',2)
+    CG_h = FunctionSpace(mesh,'CG',2)
+    u_0 = Function(CG_u)
+    h_0 = Function(CG_h)
+    
     # Trial functions
     sol = TrialFunction(W1)
     diag_trial = TrialFunction(W2)
@@ -158,21 +163,30 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     diag_old = Function(W2)
     
     
-    # Set initial values for velocity and height field 
-    # divide by 1000
-    #expr = Expression(('sin(4.0000000000*pi*x[1])/1000','0.00000000000',
-     #               '10.000000000000 + 1.0000000/(4.0000000000*pi*1000)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
+    ## 1D case
+    expr = Expression(('sin(4.0*pi*x[1])','0.0',
+                   '10.0 + 1.0/(4.0*pi)*cos(4.0*pi*x[1])'),element = W1.ufl_element())
     
+    
+    expr_u = Expression(('sin(4.0*pi*x[1])','0.0'),element = CG_u.ufl_element())
+    expr_h = Expression('10.0 + 1.0/(4.0*pi)*cos(4.0*pi*x[1])',element = CG_h.ufl_element())
+    
+    
+    ## 2D case
+    #expr = Expression(('sin(pi*x[1])','0.0000000','10.000 + sin(2*pi*x[0])*sin(pi*x[1])'),element = W1.ufl_element())
+    
+     
+    #expr_u = Expression(('sin(pi*x[1])','0.00000'),element = CG_u.ufl_element())
+    #expr_h = Expression('10.000 + sin(2*pi*x[0])*sin(pi*x[1])',element = CG_h.ufl_element())
    
-    #expr = Expression(('(1/1000.0)*sin(2*pi*x[0])*sin(x[1])','(1/1000.0)*2*pi*cos(2*pi*x[0])*cos(x[1])','10.0 + (1/1000.0)*sin(2*pi*x[0])*cos(x[1])'),element = W1.ufl_element())
-    #expr = Expression(('0.0','sin(2*pi*x[0])','1.0 + (1/4*pi)*sin(4*pi*x[1])'),element = W1.ufl_element())
-    expr = Expression(('sin(pi*x[1])','0.0000000','10.000 + sin(2*pi*x[0])*sin(pi*x[1])'),element = W1.ufl_element())
     
-    
+    u_0.interpolate(expr_u)
+    h_0.interpolate(expr_h)
     sol_old.interpolate(expr)
     
     t = 0.0
     nt = int(tf/dt) 
+    it = 0 
     
     'Implementation of the Runge-Kutta method'
     
@@ -184,30 +198,28 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
     k4 = Function(W1)
    
     
-    
     Z = FiniteElement('CG',mesh.ufl_cell(),2)
     W_elem = MixedElement([Z,Z,Z])
     Z = FunctionSpace(mesh,W_elem)
+    ## Source term 
+    S = Function(Z)   
+       
+    # Source term for 1D case 
+    S_exp = Expression(('0.0','0.0','0.0'),degree=5)  
     
+    # Source term for 2D case 
+    #S_exp = Expression(('10.0*2*pi*cos(2*pi*x[0])*sin(pi*x[1])',
+    #                    '10.0*sin(pi*x[1]) + 10.0*sin(2*pi*x[0])*pi*cos(pi*x[1])',
+    #                    '2*pi*cos(2*pi*x[0])*sin(pi*x[1])*sin(pi*x[1])'),degree=5)
     
-    S = Function(Z)
-    
-    S_exp = Expression(('10.0*2*pi*cos(2*pi*x[0])*sin(pi*x[1])',
-                        '10.0*sin(pi*x[1]) + 10.0*sin(2*pi*x[0])*pi*cos(pi*x[1])',
-                        '2*pi*cos(2*pi*x[0])*sin(pi*x[1])*sin(pi*x[1])'),degree=5)
     
     S.interpolate(S_exp)
     
+    
     scalars = np.zeros(4*(nt+1)).reshape(nt+1,4)
-    devs_vec = np.zeros(3*(nt+1)).reshape(nt+1,3)
-     
-    it = 0
+    devs_vec = np.zeros(2*(nt+1)).reshape(nt+1,2) 
     
-    
-    u_0,h_0 = sol_old.split(deepcopy = True)
-    q_0,flux_0  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-    
-    
+    u_f,h_f = sol_old.split(deepcopy = True)
     # Assemble mass matrix once before starting iterations
     a = 0
     
@@ -227,13 +239,10 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         print('Writing in pvd file')
         ufile = File('SW_paraview/sw_test_u.pvd')
         hfile = File('SW_paraview/sw_test_h.pvd')
-        qfile = File('SW_paraview/sw_test_q.pvd')
-        h_0.rename('h_0','h')
-        u_0.rename('u_0','u')
-        q_0.rename('q_0','q')
-        ufile << u_0,t
-        hfile << h_0,t
-        qfile << q_0,t
+        h_f.rename('h_f','h')
+        u_f.rename('u_f','u')
+        ufile << u_f,t
+        hfile << h_f,t
       
         
     while(it <= nt):    
@@ -276,10 +285,9 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         
         
         dif_u = errornorm(u_0,u_f)
-        dif_h = errornorm(h_0,h_f)
-        dif_q = errornorm(q_0,q_f)
+        dif_h = errornorm(h_0,h_f)      
         
-        devs_vec[it,:] = dif_u,dif_h,dif_q
+        devs_vec[it,:] = dif_u,dif_h
         scalars[it,:] = diagnostics(q_f,u_f,flux_f,h_f)      
           
         # Compute CFL condition 
@@ -287,32 +295,23 @@ def solver(mesh,W1,W2,dt,tf,output = None,lump = None):
         cfl = (max_u)*dt/mesh.hmin()
         
         
-        # Adapt the time step in order to have CFL condition equal to 0.9
-        #print('time step ')
-        #dt  = 0.1*mesh.hmin()/max_u 
-    
         if cfl > 1.0:
             print('cfl condition is not satisfied')
-            
-        
-        if dif_u/norm(u_0) < 1e-1 and dif_h/norm(h_0) < 1e-1:
-            # Move to next time step
-            t += dt
-            it = it + 1
-        else:
-            Warning('The RK scheme diverges')
-            print('Solver diverges')
-            return 
+       
+        # Move to next time step
+        t += dt
+        it = it + 1
+        #else:
+        #    Warning('The RK scheme diverges')
+        #    print('Solver diverges')
+        #    return 
         
         
         if output:
             u_f.rename('u_f','u')
             h_f.rename('h_f','h')
-            q_f.rename('q_f','q')
             ufile << u_f,t
             hfile << h_f,t  
-            qfile << q_f,t          
-
 
 
     return devs_vec,scalars
