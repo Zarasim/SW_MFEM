@@ -54,33 +54,20 @@ y_test = TestFunction(V)
 
 x = Function(V)
 y = Function(V)
-
+u = Function(U)
 n = FacetNormal(mesh)
 
 
-beta = np.array([0.5,1.0,2.0])
+beta = np.arange(1,21)*0.2
 s = beta.shape[0]
+q_meas = np.zeros(s)
 
-qfile = File('q_measure.pvd')
+qfile = File('Paraview/q_measure.pvd')
 
 for i in range(s):
         
 
     n = FacetNormal(mesh)
-
-    
-    u = Function(U)
-    w = Function(W)
-        
-    x_trial = TrialFunction(V)
-    y_trial = TrialFunction(V)
-    
-    x_test = TestFunction(V)
-    y_test = TestFunction(V)
-    
-    x = Function(V)
-    y = Function(V)
-
     
     # assign initial condition for u in the physical space, which coincides with the computational one
     u.interpolate(Expression('10.000 + sin(2*pi*x[0])*sin(2*pi*x[1])',element = U.ufl_element()))
@@ -105,7 +92,7 @@ for i in range(s):
     
     plt.figure()
     plot(mesh_)
-    plt.savefig('Adapted mesh Winslow: beta' + np.str(beta[i]) + '.png')
+    plt.savefig('mesh_plot/Adapted mesh Winslow: beta' + np.str(beta[i]) + '.png')
     
     ## inradius / circumradius. A value equal to 0 indicates degenerate element
     rad_ratio_vec = MeshQuality.radius_ratios(mesh_)
@@ -121,7 +108,7 @@ for i in range(s):
     plt.ylabel('Frequency')
     plt.title('r/R ratio, beta:' + str(beta[i]))
     maxfreq = n.max()
-    plt.savefig('hist beta' + np.str(beta[i]) + '.png')
+    plt.savefig('hist/hist beta' + np.str(beta[i]) + '.png')
     #r_min, r_max = MeshQuality.radius_ratio_min_max(mesh)
     #Q = (r_min/r_max + r_max/r_min)/2.0
     
@@ -147,11 +134,18 @@ for i in range(s):
         lambda_1, lambda_2 = abs(eigval)
         q.vector()[c.index()] = (lambda_1/lambda_2 + lambda_2/lambda_1)/2.0
     
-        
-    print('Q',max(q.vector()[:]))
+    
+    q_meas[i] = max(q.vector()[:])     
+    print('Q',q_meas[i])
     q.rename('q','q')
     qfile << q,beta[i]
     
     
+
+plt.figure()
+plt.plot(beta,q_meas)
+plt.xlabel('beta')
+plt.ylabel('Q')
+plt.savefig('Quality measure.png')    
     
-    
+plt.close('all')
