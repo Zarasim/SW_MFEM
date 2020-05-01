@@ -39,7 +39,7 @@ def monitor(x,sol_dx,alpha,arc_length):
     m = np.sqrt(1 + alpha*sol_dx**2)
         
     # normalize
-    m = m/sum(m)
+    m = m/np.sum(m)
     
     return m
 

@@ -4,8 +4,7 @@
 """
 Created on Sun Feb 16 10:37:11 2020
 
-@author: simo94
-
+@author: Zarasim
 
 This script computes the L2 deviations from a steady state solution of the nonlinear 2D Shallow Water equations.
 The equations are solved using the Mixed Finite Element method on a periodic unit square domain. 
@@ -17,20 +16,8 @@ The initial condition for h and u in the 1D case is:
     
     h = 10 + 1/(4*pi)*cos(4*pi*x[1]))
     u = (sin(4*pi*x[1]),0.0)
-    
-In order to ignore inertial forces we can consider the initial condition
-
-    h = 10 + 1/(4*pi)*cos(4*pi*x[1]))*(1/1000)
-    u = (sin(4*pi*x[1]),0.0)*(1/1000)
-
-The order of convergence obtained for the latter case with the pair (RT1,DG0)
-is given for different triangulations:
-    
-- unstructured triangle  u:2.26  h:2.43 
-- right-based triangle u: 2.012    h: 2.007
-- crossed triangle u: 2.002 h: 2.361
-    
    
+    
 The solution is computed in solver_SW.py 
 
 The module refinement.py returns a structured or unstructured mesh refined
@@ -47,7 +34,9 @@ get_ipython().magic('reset -sf')
 # Import modules
 from SW_RK4 import *
 from adaptive_mesh_1D import *
+from Winslow import *
 from mshr import *
+from initial_fields import *
 import matplotlib.pyplot as plt
 import os 
 
@@ -99,7 +88,7 @@ def conv_rate(xvalues,err):
     return rate_u,rate_h
 
 # For Delaunay tesselation do not use too small numbers or the solver diverges
-N  = np.array([12,15,21,25,28])
+N  = np.array([30])
 
 
 # N for right-based and crossed triangles
@@ -118,11 +107,7 @@ dof_tot = np.zeros(n_iter)
 ### Parameters for equidistributing mesh ###    
 
 n_equid_iter = 5
-alpha = 10
-
-# Choose monitor function 
-source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
-#'4*pi*np.cos(4*pi*x)'
+alpha = 15
 
 dt = 0.0005
 tf = 0.1
@@ -130,31 +115,50 @@ nt = np.int(tf/dt)
 
 t_vec = np.arange(1,nt+2)*dt
 
-space_str = 'CG1RT1DG0'
+space_q = 'CG'
+deg_q = 2
+space_u = 'BDM'
+deg_u = 1
+space_h = 'DG'
+deg_h = 0
+
+
+test_dim = '1D'
+
+space_str = space_q + str(deg_q) + space_u + str(deg_u) + space_h + str(deg_h) 
+
 
 for i in range(n_iter):
     
     print('step ',i+1)
     
-    #mesh = UnitSquareMesh(N[i],N[i]) 
+    mesh = UnitSquareMesh(N[i],N[i]) 
+    
     ## Quadrilateral mesh does not support RT,BDM space and refinement
     #mesh = RectangleMesh.create([Point(0.0,0.0),Point(1.0,1.0)],[N[i],N[i]],CellType.Type.quadrilateral)
     
     ## Generate unstructured mesh with Delaunay triangulation 
-    domain = Rectangle(Point(0.,0.),Point(1.,1.))
-    mesh = generate_mesh(domain,N[i],'cgal') 
-    mesh.smooth()
+    #domain = Rectangle(Point(0.,0.),Point(1.,1.))
+    #mesh = generate_mesh(domain,N[i],'cgal') 
+    #mesh.smooth()
     
-    ## Equidistribute mesh
+    
+    ## Set up initial exact condition 
+    u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
+
+    
+    ## Plot initial equidistributed mesh
     #mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
-       
+    #mesh = Winslow_eq(mesh,N[i],u_0,h_0,monitor = 'arc-length')   
+    
+    
     # Plot refined mesh 
     plt.figure(i)
     plot(mesh)
              
-    E = FiniteElement('CG',mesh.ufl_cell(),1)
-    U = FiniteElement('RT',mesh.ufl_cell(),1)
-    H = FiniteElement('DG',mesh.ufl_cell(),0)
+    E = FiniteElement(space_q,mesh.ufl_cell(),deg_q)
+    U = FiniteElement(space_u,mesh.ufl_cell(),deg_u)
+    H = FiniteElement(space_h,mesh.ufl_cell(),deg_h)
 
     
     W_elem = MixedElement([U,H])
@@ -166,7 +170,7 @@ for i in range(n_iter):
     
     # dev_sol contains devs from u_0 and h_0 in t
     # dev_scalars contains devs of Energy,Enstrophy,q,Mass in t
-    dev_sol,dev_scalars = solver(mesh,W1,W2,dt,tf,output=0,lump=0)
+    dev_sol,dev_scalars = solver(mesh,W1,W2,u_0,h_0,dt,tf,output=1,lump=0,case = test_dim)
 
     dof_tot[i] = W1.dim()
     dof_u = W1.sub(0).dim()
@@ -175,7 +179,7 @@ for i in range(n_iter):
     
     for j in range(2):     
         err_sol[i,j] = np.mean(dev_sol[:,j])       
-        
+        #err_scalars[i,j] = np.mean(dev_scalars[:,j])
     
 rel_path = os.getcwd()
 pathset = os.path.join(rel_path,'Data_' + space_str)
@@ -197,12 +201,14 @@ plt.xlabel('t')
 plt.ylabel('L2 error')
 plt.title('u')
 plt.ticklabel_format(axis="y", style="sci",scilimits=(0,0))
+plt.savefig('Err_u')
 fig = plt.figure()
 plt.plot(t_vec,dev_sol[:,1])
 plt.xlabel('t')
 plt.ylabel('L2 error')
 plt.title('h')
 plt.ticklabel_format(axis="y", style="sci",scilimits=(0,0))
+plt.savefig('Err_h')
 
 ####  Deviations Physical quantities ####
 
@@ -245,11 +251,15 @@ plt.title('Mass')
 plt.ylabel('$(m - m_{0})/m_{0}$')
 plt.xlabel('t')
 fig.tight_layout()
+plt.savefig('scalars')
+
+
+
 
 #### Convergence Rate ####
 
 
-# Compute convergence rate
+# Compute convergence rate for solution 
 rate_u,rate_h = conv_rate(dof,err_sol)
 
 output_file = 'err' + str(N[-1])  +  '_' + space_str
@@ -259,7 +269,6 @@ np.save(os.path.join(pathset, output_file),err_sol)
 output_file = 'dof' + str(N[-1])  + '_' + space_str
 np.save(os.path.join(pathset, output_file),dof)        
 
-
 fig, ax = plt.subplots()
 ax.plot(np.sqrt(dof[:,0]),err_sol[:,0],linestyle = '-.',marker = 'o',label = 'u:'+ "%.4g" %rate_u)
 ax.plot(np.sqrt(dof[:,1]),err_sol[:,1],linestyle = '-.',marker = 'o',label = 'h:'+ "%.4g" %rate_h)
@@ -268,5 +277,27 @@ ax.set_ylabel('L2 error')
 ax.set_yscale('log')
 ax.set_xscale('log')           
 ax.legend(loc = 'best')
+plt.savefig('conv_rate_sol')
+
+# Compute convergence rate for scalars
 
 
+# Compute convergence rate for solution 
+# rate_u,rate_h = conv_rate(dof,err_sol)
+
+# output_file = 'err' + str(N[-1])  +  '_' + space_str
+# np.save(os.path.join(pathset, output_file),err_sol)        
+
+
+# output_file = 'dof' + str(N[-1])  + '_' + space_str
+# np.save(os.path.join(pathset, output_file),dof)        
+
+# fig, ax = plt.subplots()
+# ax.plot(np.sqrt(dof[:,0]),err_scalars[:,0],linestyle = '-.',marker = 'o',label = 'u:'+ "%.4g" %rate_u)
+# ax.plot(np.sqrt(dof[:,1]),err_scalars[:,1],linestyle = '-.',marker = 'o',label = 'h:'+ "%.4g" %rate_h)
+# ax.set_xlabel('$\sqrt{n_{dof}}$')
+# ax.set_ylabel('L2 error')
+# ax.set_yscale('log')
+# ax.set_xscale('log')           
+# ax.legend(loc = 'best')
+# plt.savefig('conv_rate_scalars')

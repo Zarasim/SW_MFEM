@@ -12,30 +12,20 @@ This is used for solving solving the system Delaunay triangulation
 """
 
 
-
-"""
-
-Created on Sun Feb 16 16:20:17 2020
-
-@author: simo94
-
-"""
-
-
 from dolfin import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-#form_compiler_parameters = {"quadrature_degree": 6}
+form_compiler_parameters = {"quadrature_degree": 6}
 
 
-def diagnostics(vort,u,flux,h,vort_0,u_0,f_0,h_0):
+def diagnostics(vort,u,flux,h,vort_0,u_0,flux_0,h_0):
 
     g = Constant(10.0)  # gravity
     f = Constant(10.0)  # Coriolis term
     
-    u = (u + u_0)/2
-    h = (h + h_0)/2
+    u = (u + u_0)/2.0
+    h = (h + h_0)/2.0
     
     # Energy
     E = assemble(0.5*(h*inner(u,u) + g*h**2)*dx)
@@ -87,18 +77,12 @@ def weak_form(u_test,u_old,u,flux_test,flux,vort_test,vort_old,vort,h_test,
     # weight u and h by theta to obtain a time-stepping method
     u_mid = (1.0-theta)*u_old + theta*u
     h_mid = (1.0-theta)*h_old + theta*h
-    vort_mid = (1.0-theta)*vort_old + theta*vort
-    
+
     #### vorticity ####
     
-    #a = (inner(vort_test,vort*h) - inner(vort_test,vort_old*h_old))*dx
-    #L = dt*(vort_test.dx(0)*vort_mid*flux[0] + 
-    #        vort_test.dx(1)*vort_mid*flux[1])*dx 
-     
-    a = inner(vort_test,vort*h_old)*dx
-    L = (vort_test.dx(1)*u_old[0] - vort_test.dx(0)*u_old[1])*dx + inner(vort_test,f)*dx
-     
-    
+    a = inner(vort_test,vort*h_mid)*dx
+    L = (vort_test.dx(1)*u_mid[0] - vort_test.dx(0)*u_mid[1])*dx + f*vort_test*dx
+       
     F += a - L
     
     #### flux  ####
@@ -114,8 +98,8 @@ def weak_form(u_test,u_old,u,flux_test,flux,vort_test,vort_old,vort,h_test,
     F += M_momentum
     
     # Advection term 
-    A_momentum = dt*(-u_test[0]*vort_mid*flux[1] 
-                     + u_test[1]*vort_mid*flux[0])*dx
+    A_momentum = dt*(-u_test[0]*vort*flux[1] 
+                     + u_test[1]*vort*flux[0])*dx
     F += A_momentum
 
     # Gradient term     
@@ -144,32 +128,39 @@ def solver(mesh,W,dt,tf,output = None,lump = None):
     # (u,h): sol  (vort,flux): diag
     
     sol = Function(W)
+    sol_old = Function(W)
     vort,u,flux,h = split(sol)
 
     # Test functions
     vort_test,u_test,flux_test,h_test = TestFunctions(W)
 
 
-    # Set initial values for velocity and height field 
-    # divide by 1000
-    #expr = Expression(('sin(4.0000000000*pi*x[1])/1000.0','0.00000000000',
-    #'10.000000000000 + 1.0000000/(4.0000000000*pi*1000.0)*cos(4.0000000000*pi*x[1])'),element = W1.ufl_element())
-    
-    #expr = Expression(('(1/1000.0)*sin(2*pi*x[0])*sin(x[1])','(1/1000.0)*2*pi*cos(2*pi*x[0])*cos(x[1])','10.0 + (1/1000.0)*sin(2*pi*x[0])*cos(x[1])'),element = W1.ufl_element())
-    #expr = Expression(('0.0','sin(2*pi*x[0])','1.0 + (1/4*pi)*sin(4*pi*x[1])'),element = W1.ufl_element())
-    
-
     # Define initial conditions
-    sol_old = Function(W)
-    expr = Expression(('(-4*pi*cos(4*pi*x[1]) + 10.0)/(10.0 + (1/(4*pi))*cos(4*pi*x[1]))',
-                    'sin(4.0000000000*pi*x[1])','0.00000000000',
+    expr = Expression(('0.0',
+                    'sin(4.0*pi*x[1])','0.0',
                     '0.0','0.0',
-                    '10.0 + (1/(4*pi))*cos(4*pi*x[1])'),element = W.ufl_element())
+                    '10.0 + (1/(4.0*pi))*cos(4.0*pi*x[1])'),element = W.ufl_element())
     
     sol_old.interpolate(expr)
 
-    # zero initial conditions 
-    vort_old,u_old,f_old, h_old = sol_old.split(deepcopy = True)
+       
+    CG_u = VectorFunctionSpace(mesh,'CG',2)
+    CG_h = FunctionSpace(mesh,'CG',2)
+    u_0 = Function(CG_u)
+    h_0 = Function(CG_h)
+    expr_u = Expression(('sin(4.0*pi*x[1])','0.0'),element = CG_u.ufl_element())
+    expr_h = Expression('10.0 + 1.0/(4.0*pi)*cos(4.0*pi*x[1])',element = CG_h.ufl_element())
+    
+    
+    ## 2D case
+    #expr = Expression(('sin(pi*x[1])','0.0000000','10.000 + sin(2*pi*x[0])*sin(pi*x[1])'),element = W1.ufl_element())     
+    #expr_u = Expression(('sin(pi*x[1])','0.00000'),element = CG_u.ufl_element())
+    #expr_h = Expression('10.000 + sin(2*pi*x[0])*sin(pi*x[1])',element = CG_h.ufl_element())
+   
+    
+    u_0.interpolate(expr_u)
+    h_0.interpolate(expr_h)
+        
 
     # Assign initial conditions to trial functions
     sol.assign(sol_old) 
@@ -177,29 +168,28 @@ def solver(mesh,W,dt,tf,output = None,lump = None):
     # trapezium implicit time-step method
     theta = 0.5
     
+    vort_old,u_old,flux_old,h_old = split(sol_old)
+    
+    # Pass separately each component of sol vector
     F = weak_form(u_test,u_old,u,flux_test,flux,vort_test,vort_old,vort,h_test,
                   h_old,h,theta,dt)    
    
     t = 0.0
     nt = int(tf/dt) 
-    
     it = 0
             
     scalars = np.zeros(4*(nt+1)).reshape(nt+1,4)
-    devs_vec = np.zeros(3*(nt+1)).reshape(nt+1,3)
+    devs_vec = np.zeros(2*(nt+1)).reshape(nt+1,2)
  
     if output:
         print('Writing in pvd file')
         ufile = File('SW_paraview/sw_test_u.pvd')
         hfile = File('SW_paraview/sw_test_h.pvd')
-        qfile = File('SW_paraview/sw_test_q.pvd')
         h_0.rename('h_0','h')
         u_0.rename('u_0','u')
-        q_0.rename('q_0','q')
         ufile << u_0,t
         hfile << h_0,t
-        qfile << q_0,t
-      
+
            
     while(it <= nt):    
 
@@ -215,45 +205,41 @@ def solver(mesh,W,dt,tf,output = None,lump = None):
         # set solver paramters 
         prm = solver.parameters
         
-        prm['newton_solver']['absolute_tolerance'] = 1e-8
-        prm['newton_solver']['relative_tolerance'] = 1e-8
+        prm['newton_solver']['absolute_tolerance'] = 1e-12
+        prm['newton_solver']['relative_tolerance'] = 1e-12
         prm['newton_solver']['linear_solver'] = 'lu'
-        prm['newton_solver']['maximum_iterations'] = 100
+        prm['newton_solver']['maximum_iterations'] = 10
         
         
-        vort_0,u_0,f_0,h_0 = split(sol_old)
+        vort_old,u_old,f_old,h_old = sol_old.split(deepcopy = True)
         
         solver.solve()
         sol_old.assign(sol)      
 
         vort_f,u_f,flux_f,h_f = sol.split()
               
-        scalars[it,:] = diagnostics(vort_f,u_f,flux_f,h_f,vort_0,u_0,f_0,h_0)
+        scalars[it,:] = diagnostics(vort_f,u_f,flux_f,h_f,vort_old,u_old,f_old,h_old)
     
-        dif_u = errornorm(u_old,u_f)
-        dif_h = errornorm(h_old,h_f)
-        dif_vort = errornorm(vort_old,vort_f)
+        dif_u = errornorm(u_0,u_f)
+        dif_h = errornorm(h_0,h_f)
         
-        devs_vec[it,:] = dif_u,dif_h,dif_vort
-        
+        devs_vec[it,:] = dif_u,dif_h        
             
-        if dif_u < 10 and dif_h < 10:
+        #if dif_u < 1e-1 and dif_h < 1e-1:
             # Move to next time step
-            t += dt
-            it = it + 1
-        else:
-            Warning('The RK scheme diverges')
-            print('Solver diverges')
-            return 
+        t += dt
+        it = it + 1
+        #else:
+        #    Warning('The RK scheme diverges')
+        #    print('Solver diverges')
+        #    return 
         
         
         if output:
             u_f.rename('u_f','u')
             h_f.rename('h_f','h')
-            q_f.rename('q_f','q')
             ufile << u_f,t
-            hfile << h_f,t  
-            qfile << vort_f,t          
+            hfile << h_f,t
 
 
     return devs_vec,scalars
