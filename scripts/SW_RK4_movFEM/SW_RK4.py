@@ -12,20 +12,70 @@ Created on Sun Feb 16 16:20:17 2020
 
 
 from dolfin import *
+from Winslow import *
 import numpy as np
 import matplotlib.pyplot as plt
-from Winslow import *
-
-
 
 #form_compiler_parameters = {"quadrature_degree": 6}
 
-def diagnostics(vort0,u0,flux0,h0,vort,u,flux,h,S,dt,t):
+
+## User expression for merging vortex problem 
+
+
+
+class PeriodicBoundary(SubDomain):
+    
+    ' Set periodic boundary conditions '
+
+    # Left boundary is "target domain" G
+    def inside(self, x, on_boundary):
+        # return True if on left or bottom boundary AND NOT on one of the two corners (0, 1) and (1, 0)
+        return bool((near(x[0], 0) or near(x[1], 0)) and 
+                (not ((near(x[0], 0) and near(x[1], 1)) or 
+                        (near(x[0], 1) and near(x[1], 0)))) and on_boundary)
+
+    def map(self, x, y):
+        if near(x[0], 1) and near(x[1], 1):
+            y[0] = x[0] - 1.
+            y[1] = x[1] - 1.
+        elif near(x[0], 1):
+            y[0] = x[0] - 1.
+            y[1] = x[1]
+        else:   # near(x[1], 1)
+            y[0] = x[0]
+            y[1] = x[1] - 1.
+
+
+class MyExpression(UserExpression):
+    
+    def __init__(self, sigma,xa,xb,yc,**kwargs):
+        super().__init__(**kwargs) # This part is new!
+        self.sigma = sigma
+        self.xa = xa
+        self.xb = xb
+        self.ya = yc
+        
+    def eval(self, value, x):
+            dxa = x[0] - self.xa
+            dxb = x[0] - self.xb
+            
+            dy = x[1] - self.ya
+            
+            value[0] =  -(1.0/100.0)*dy*(exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) + exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))/(2.0*pi*self.sigma**2)
+            value[1] = (1.0/100.0)*(dxa*exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) + dxb*exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))/(2.0*pi*self.sigma**2)
+            value[2] = 10.0  + (1.0/100.0)*(1.0/(2.0*pi*self.sigma))*(exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) +  exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))
+
+            
+    def value_shape(self):
+        return (3,)
+
+
+def diagnostics(vort,u,flux,h,S,dt,t):
 
     g = Constant(10.0)  # gravity
-    vort_mid = (vort0 + vort)/2
-    u_mid = (u0 + u)/2
-    h_mid = (h0 + h)/2
+    #vort_mid = (vort0 + vort)/2
+    #u_mid = (u0 + u)/2
+    #h_mid = (h0 + h)/2
     
     
     S1,S2,S3 = split(S)
@@ -134,8 +184,23 @@ def weak_form(sol_old,sol_test,vort_old,flux_old,S,dt):
    C_momentum = dt*inner(div(u_test),g*h_old + 0.5*inner(u_old,u_old))*dx
    
    
-   L += C_momentum + A_momentum + dt*(u_test[0]*S1 + u_test[1]*S2)*dx
-    
+   # Source term 
+   S_momentum = dt*(u_test[0]*S1 + u_test[1]*S2)*dx
+   
+   
+   # Anticipated potential vorticity
+   # This removes inertia-gravity waves so that we can apply our moving mesh
+   # strategy
+   
+   #tau = dt/2.0
+   # 1st component of Q
+   #Q_momentum =  + tau*(u_old[0]*(vort_old.dx(0)*flux_old[0] + vort_old*flux_old[0].dx(0)) \
+   #                    + u_old[1]*(vort_old.dx(1)*flux_old[0] + vort_old*flux_old[0].dx(1)))*u_test[1]*dx \
+   #             - tau*(u_old[0]*(vort_old.dx(0)*flux_old[1] + vort_old*flux_old[1].dx(0)) \
+   #                    + u_old[1]*(vort_old.dx(1)*flux_old[1] + vort_old*flux_old[1].dx(1)))*u_test[0]*dx
+   
+   
+   L += C_momentum + A_momentum + S_momentum #+ Q_momentum  
     
    #### Continuity equation #### 
 
@@ -166,10 +231,6 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
     sol_old = Function(W1)
     diag_old = Function(W2)
     
-    res = Function(W1)
-    res_u,res_h = res.split()
-    
-    
     
     Z = FiniteElement('CG',mesh.ufl_cell(),4)
     W_elem = MixedElement([Z,Z,Z])
@@ -182,8 +243,8 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
     ## 1D case
     
     if case == '1D':
-        expr = Expression(('sin(4.0*pi*x[1])','0.0',
-                       '10.0 + 1.0/(4.0*pi)*cos(4.0*pi*x[1])'),element = W1.ufl_element())
+        expr = Expression(('sin(4.0*pi*x[1])/1000','0.0',
+                       '10.0 + 1.0/(4.0*pi*1000)*cos(4.0*pi*x[1])'),element = W1.ufl_element())
         
         
         # expr_u = Expression(('sin(4.0*pi*x[1])','0.0'),element = CG_u.ufl_element())
@@ -195,23 +256,26 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         S_exp = Expression(('0.0','0.0','0.0'),degree=4)  
     
     else:
-        expr = Expression(('sin(pi*x[1])','0.0000000','10.000 + sin(2*pi*x[0])*sin(pi*x[1])'),element = W1.ufl_element())
+        
+        expr = Expression(('sin(pi*x[1])','0.0000000','10.000 + sin(2*pi*x[0])*sin(2*pi*x[1])'),element = W1.ufl_element())
     
      
         # expr_u = Expression(('sin(pi*x[1])','0.00000'),element = CG_u.ufl_element())
         # expr_h = Expression('10.000 + sin(2*pi*x[0])*sin(pi*x[1])',element = CG_h.ufl_element())
         
          # Source term for 2D case on the right side
-        S_exp = Expression(('10.0*2*pi*cos(2*pi*x[0])*sin(pi*x[1])',
-                        '10.0*sin(pi*x[1]) + 10.0*sin(2*pi*x[0])*pi*cos(pi*x[1])',
-                        '2*pi*cos(2*pi*x[0])*sin(pi*x[1])*sin(pi*x[1])'),degree=4)
+        S_exp = Expression(('10.0*2*pi*cos(2*pi*x[0])*sin(2*pi*x[1])',
+                        '10.0*sin(pi*x[1]) + 10.0*sin(2*pi*x[0])*2*pi*cos(2*pi*x[1])',
+                        '2*pi*cos(2*pi*x[0])*sin(pi*x[1])*sin(2*pi*x[1])'),degree=4)
    
+    
+    
+    #expr = MyExpression(sigma = 0.01,xa = 0.4 ,xb = 0.6,yc = 0.5,element = W1.ufl_element())
     sol_old.interpolate(expr)
+    
+    #S_exp = Expression(('0.0','0.0','0.0'),degree=4)  
     S.interpolate(S_exp)
-    
-    
-    # u_0 = interpolate(expr_u,CG_u)
-    # h_0 = interpolate(expr_h,CG_h)
+
     
     t = 0.0
     nt = int(tf/dt) 
@@ -226,11 +290,13 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
     k3 = Function(W1) 
     k4 = Function(W1)
    
+    u_f = Function(W1.sub(0).collapse())
+    h_f = Function(W1.sub(1).collapse())
     
     scalars = np.zeros(4*(nt+1)).reshape(nt+1,4)
     devs_vec = np.zeros(2*(nt+1)).reshape(nt+1,2) 
     
-    u_f,h_f = sol_old.split(deepcopy = True)
+    #u_f,h_f = sol_old.split(deepcopy = True)
     # Assemble mass matrix once before starting iterations
     a = 0
     
@@ -250,11 +316,12 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         print('Writing in pvd file')
         ufile = File('SW_paraview/sw_test_u.pvd')
         hfile = File('SW_paraview/sw_test_h.pvd')
-        h_f.rename('h_f','h')
-        u_f.rename('u_f','u')
-        ufile << u_f,t
-        hfile << h_f,t
-      
+        qfile = File('SW_paraview/sw_test_q.pvd')
+        u_0.rename('u_0','u')
+        h_0.rename('h_0','h')
+        ufile << u_0,t
+        hfile << h_0,t
+          
         
     while(it <= nt):    
 
@@ -293,59 +360,67 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         solve(A,k4.vector(),b)
         sol_old.assign(sol_n + 1/6*(k1 + 2*k2 + 2*k3 + k4))
         
-        u_f,h_f = sol_old.split(deepcopy = True)
+        utemp,htemp = sol_old.split(deepcopy = True)
+        
+        u_f.assign(utemp)
+        h_f.assign(htemp)
+        
         q_f,flux_f  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        
-        un,hn = sol_n.split() 
-        qn,fluxn = diag_n.split() 
-        
+              
         
         dif_u = errornorm(u_0,u_f,norm_type='l2', degree_rise=3)
         dif_h = errornorm(h_0,h_f,norm_type='l2', degree_rise=3)      
         
         devs_vec[it,:] = dif_u,dif_h
-        
-        t += dt
-        scalars[it,:] = diagnostics(qn,un,fluxn,hn,q_f,u_f,flux_f,h_f,S,dt,t)      
+        scalars[it,:] = diagnostics(q_f,u_f,flux_f,h_f,S,dt,t)      
           
-        # Compute CFL condition as min(u/dx,v/dy) for structured grids
-        max_u = max(u_0.vector()[:])
+        # Compute CFL condition by looking at max(u_vector/h) for each cell
+        # of the mesh 
+        max_u = max(u_f.vector()[:])
         cfl = (max_u)*dt/mesh.hmin()
+        
+
+        ## Compute new mesh with Winslow and project 
+        mesh_ = Winslow_eq(mesh,u_f,h_f,monitor = 'arc-length')  
+        
+        ## Create new function space and project 
+        U2 = FiniteElement('RT',mesh_.ufl_cell(),1)
+        H2 = FiniteElement('DG',mesh_.ufl_cell(),0)
+
+        U2_space = FunctionSpace(mesh_,U2,constrained_domain=PeriodicBoundary())
+        H2_space = FunctionSpace(mesh_,U2,constrained_domain=PeriodicBoundary())
+        
+        u_proj = project(u_f,U2_space)
+        h_proj = project(h_f,H2_space)
+        
+        mesh.coordinates()[:,0] = mesh_.coordinates()[:,0]
+        mesh.coordinates()[:,1] = mesh_.coordinates()[:,1]
+        
+        sol_old.sub(0).assign(u_proj)
+        sol_old.sub(1).assign(h_proj)
         
         
         if cfl > 1.0:
             print('cfl condition is not satisfied')
-       
+            
+        
         # Move to next time step
+        if dif_u > 1.0 or dif_h > 1.0: 
+            
+            Warning('The RK scheme diverges')
+            print('Solver diverges')
+            return 
+        
         it = it + 1
-       
-        
-        # Compute Residual fields and adapt the mesh on it 
-        res_u = project(u_0-u_f,W1.sub(0).collapse())
-        res_h = project(h_0-h_f,W1.sub(1).collapse())
-        
-        ## Update mesh automatically in the definition of spaces          
-        mesh_ = Winslow_eq(mesh,res_u,res_h,monitor = 'arc-length')
-        
-        # Evaluate new values of sol_old in the new mesh_ using evaluate 
-        
-        
-        sol_old.vector()[:] = 
-        
-        
-        ## update all other function spaces
-        mesh = mesh_
-              
-        #else:
-        #    Warning('The RK scheme diverges')
-        #    print('Solver diverges')
-        #    return 
+        t += dt
         
         if output:
             u_f.rename('u_f','u')
             h_f.rename('h_f','h')
+            q_f.rename('q_f','q')
             ufile << u_f,t
             hfile << h_f,t  
+            qfile << q_f,t
 
 
     return devs_vec,scalars

@@ -43,21 +43,26 @@ def conv_rate(xvalues,err):
 os.getenv("HOME")
 
 data_path = '/home/simo94/Documents/Data_folder'
-fin_path = '/RK4/Uniform/1D/Data_CG1RT1DG0/right-biased'
+fin_path = '/RK4/Uniform/2D/Data_CG2BDM1DG0'
 
 
 
 pathset = os.path.join(data_path + fin_path)
-outputfile1 = '/dev_scalars_N_10_CG1RT1DG0.npy'
-outputfile2 = '/dev_sol_N_10_CG1RT1DG0.npy'
-outputfile3 = '/err20_CG1RT1DG0.npy'
-outputfile4 = '/dof20_CG1RT1DG0.npy'
+outputfile1 = '/home/simo94/Documents/Data_folder/RK4/Uniform/2D/Data_CG2BDM1DG0/err60_CG2BDM1DG0.npy'
+outputfile2 = '/home/simo94/Documents/Data_folder/adaptive/2D/Data_CG2BDM1DG0/err60_CG2BDM1DG0.npy'
+
+#outputfile2 = '/dev_sol_N_10_CG1RT1DG0.npy'
+#outputfile3 = '/err20_CG1RT1DG0.npy'
+#outputfile4 = '/dof20_CG1RT1DG0.npy'
 
 
-dev_scalars = np.load(pathset+outputfile1)
-dev_sol = np.load(pathset+outputfile2)
-err_sol = np.load(pathset+outputfile3)
-dof = np.load(pathset+outputfile4)
+dev_scalars = np.load(outputfile1)
+dev_scalars_adap = np.load(outputfile2)
+
+#dev_scalars = np.load(pathset+outputfile1)
+#dev_sol = np.load(pathset+outputfile2)
+#err_sol = np.load(pathset+outputfile3)
+#dof = np.load(pathset+outputfile4)
 
 
 dt = 0.0005

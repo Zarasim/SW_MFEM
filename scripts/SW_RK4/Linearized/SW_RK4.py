@@ -17,57 +17,26 @@ import matplotlib.pyplot as plt
 
 #form_compiler_parameters = {"quadrature_degree": 6}
 
-
-## User expression for merging vortex problem 
-
-class MyExpression(UserExpression):
-    
-    def __init__(self, sigma,xa,xb,yc,**kwargs):
-        super().__init__(**kwargs) # This part is new!
-        self.sigma = sigma
-        self.xa = xa
-        self.xb = xb
-        self.ya = yc
-        
-    def eval(self, value, x):
-            dxa = x[0] - self.xa
-            dxb = x[0] - self.xb
-            
-            dy = x[1] - self.ya
-            
-            value[0] =  -(1.0/100.0)*dy*(exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) + exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))/(2.0*pi*self.sigma**2)
-            value[1] = (1.0/100.0)*(dxa*exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) + dxb*exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))/(2.0*pi*self.sigma**2)
-            value[2] = 10.0  + (1.0/100.0)*(1.0/(2.0*pi*self.sigma))*(exp(-(dxa*dxa + dy*dy)/(2.0*self.sigma)) +  exp(-(dxb*dxb + dy*dy)/(2.0*self.sigma)))
-
-            
-    def value_shape(self):
-        return (3,)
-
-
-def diagnostics(vort,u,flux,h,S,dt,t):
+def diagnostics(u,h,S,dt,t):
 
     g = Constant(10.0)  # gravity
     #vort_mid = (vort0 + vort)/2
     #u_mid = (u0 + u)/2
     #h_mid = (h0 + h)/2
     
-    
     S1,S2,S3 = split(S)
     # Energy
-    E = assemble(0.5*(h*inner(u,u) + g*h**2)*dx)
-    #E = assemble(0.5*(h*inner(u,u) + g*h**2)*dx) - assemble(0.5*(h0*inner(u0,u0) + g*h0**2)*dx)- dt*(assemble(h*(u_mid[0]*S1 + u_mid[1]*S2)*dx) + assemble(S3*(0.5*inner(u_mid,u_mid) + g*h_mid)*dx))
-          
-    # Enstrophy    
-    Ens = assemble((vort**2)*h*dx)
-    #Ens = assemble((vort**2)*h*dx) - assemble((vort0**2)*h0*dx)- dt*(assemble(2*vort_mid*(-S1.dx(1) + S2.dx(0))*dx) - assemble((vort_mid**2)*S3*dx)) 
+    E_kin = assemble(h*inner(u,u)*dx)
+    E_pot = assemble(g*h*h*dx)
     
-    # Absolute vorticity 
-    Absv = assemble(vort*h*dx)
-        
+    #E = assemble(0.5*(h*inner(u,u) + g*h**2)*dx) - assemble(0.5*(h0*inner(u0,u0) + g*h0**2)*dx)- dt*(assemble(h*(u_mid[0]*S1 + u_mid[1]*S2)*dx) + assemble(S3*(0.5*inner(u_mid,u_mid) + g*h_mid)*dx))
+              
     # Mass
     M = assemble(h*dx) #- t*assemble(S3*dx)
+    
+    E =  assemble(0.5*(h*inner(u,u) + g*h*h)*dx)
 
-    return E,Ens,Absv,M
+    return E_pot,E_kin,M,E
 
 
 def lumping(a):
@@ -90,55 +59,16 @@ def lumping(a):
     return A
 
 
-
-
-def diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old):
-     
-   'Find vorticity and flux, then create form with unknown (u,h)'
-        
-   a = 0
-   L = 0
-    
-   f = Constant(10.0)
-    
-   u_old,h_old = split(sol_old)
-
-
-   #### vorticity ####
-
-   vort,flux = split(diag_trial)
-   vort_test,flux_test = split(diag_test)
-   vort_old,flux_old = split(diag_old)
-    
-   lhs_vort = inner(vort_test,vort*h_old)*dx
-   rhs_vort = (vort_test.dx(1)*u_old[0] - vort_test.dx(0)*u_old[1])*dx + inner(vort_test,f)*dx
-    
-   #### flux  ####
-
-   lhs_flux = inner(flux,flux_test)*dx
-   rhs_flux = inner(h_old*u_old,flux_test)*dx
-    
-    
-   a = lhs_flux + lhs_vort
-   L = rhs_flux + rhs_vort
-    
-   A = assemble(a)
-   b = assemble(L)
-    
-   solve(A,diag_old.vector(),b)
-   vort_old,flux_old = diag_old.split()
-    
-   return vort_old,flux_old
     
 
 
-
-def weak_form(sol_old,sol_test,vort_old,flux_old,S,dt):
+def weak_form(sol_old,sol_test,S,dt):
     
    "weak form of Shallow Water equations in vector-invariant form"
     
    g = Constant(10.0)
-   
+   f = Constant(10.0)
+   H = Constant(10.0)
    
    u_old,h_old = split(sol_old)               # Function
    u_test,h_test = split(sol_test)            # Test function  
@@ -150,16 +80,15 @@ def weak_form(sol_old,sol_test,vort_old,flux_old,S,dt):
        
     
    # Advection term 
-   A_momentum = dt*(u_test[0]*vort_old*flux_old[1] 
-                     - u_test[1]*vort_old*flux_old[0])*dx
+   A_momentum = dt*f*(u_test[0]*u_old[1] -u_test[1]*u_old[0])*dx
     
 
    # Gradient term     
-   C_momentum = dt*inner(div(u_test),g*h_old + 0.5*inner(u_old,u_old))*dx
+   C_momentum = dt*g*div(u_test)*h_old*dx
    
    
    # Source term 
-   S_momentum = dt*(u_test[0]*S1 + u_test[1]*S2)*dx
+   #S_momentum = dt*(u_test[0]*S1 + u_test[1]*S2)*dx
    
    
    # Anticipated potential vorticity
@@ -174,12 +103,12 @@ def weak_form(sol_old,sol_test,vort_old,flux_old,S,dt):
    #                    + u_old[1]*(vort_old.dx(1)*flux_old[1] + vort_old*flux_old[1].dx(1)))*u_test[0]*dx
    
    
-   L += C_momentum + A_momentum + S_momentum #+ Q_momentum  
+   L += C_momentum + A_momentum  #+ Q_momentum  #S_momentum
     
    #### Continuity equation #### 
 
     
-   rhs_continuity = -dt*(h_test*div(flux_old))*dx + dt*h_test*S3*dx
+   rhs_continuity = -dt*H*h_test*div(u_old)*dx
    L += rhs_continuity
 
     
@@ -217,8 +146,8 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
     ## 1D case
     
     if case == '1D':
-        expr = Expression(('sin(4.0*pi*x[1])/1000','0.0',
-                       '10.0 + 1.0/(4.0*pi*1000)*cos(4.0*pi*x[1])'),element = W1.ufl_element())
+        expr = Expression(('sin(2.00000*pi*x[1])','0.0000000',
+                       '10.0000 + 1.0000/(2.00000*pi)*cos(2.0000*pi*x[1])'),element = W1.ufl_element())
         
         
         # expr_u = Expression(('sin(4.0*pi*x[1])','0.0'),element = CG_u.ufl_element())
@@ -288,7 +217,6 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         print('Writing in pvd file')
         ufile = File('SW_paraview/sw_test_u.pvd')
         hfile = File('SW_paraview/sw_test_h.pvd')
-        qfile = File('SW_paraview/sw_test_q.pvd')
         u_0.rename('u_0','u')
         h_0.rename('h_0','h')
         ufile << u_0,t
@@ -298,44 +226,35 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
     while(it <= nt):    
 
         sol_n = sol_old.copy(deepcopy = True)
+
         
-        q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        diag_n = diag_old.copy(deepcopy = True) 
-        
-        L = weak_form(sol_old,sol_test,q_old,flux_old,S,dt)    
+        L = weak_form(sol_old,sol_test,S,dt)    
    
         b = assemble(L)
         solve(A,k1.vector(),b)
         sol_old.assign(sol_n + 0.5*k1)      
         
-        
-        q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        L = weak_form(sol_old,sol_test,q_old,flux_old,S,dt)    
    
+        L = weak_form(sol_old,sol_test,S,dt)       
+        
         b = assemble(L)
         solve(A,k2.vector(),b)
         sol_old.assign(sol_n + 0.5*k2)
         
        
-        q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        L = weak_form(sol_old,sol_test,q_old,flux_old,S,dt)    
-   
+        L = weak_form(sol_old,sol_test,S,dt)  
+        
         b = assemble(L)
         solve(A,k3.vector(),b)
         sol_old.assign(sol_n + k3)
         
-        q_old,flux_old  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        L = weak_form(sol_old,sol_test,q_old,flux_old,S,dt)    
-      
 
+        L = weak_form(sol_old,sol_test,S,dt)  
         b = assemble(L)
         solve(A,k4.vector(),b)
         sol_old.assign(sol_n + 1/6*(k1 + 2*k2 + 2*k3 + k4))
         
         u_f,h_f = sol_old.split(deepcopy = True)
-        q_f,flux_f  = diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old)
-        
-        
         
         dif_u = errornorm(u_0,u_f,norm_type='l2', degree_rise=3)
         dif_h = errornorm(h_0,h_f,norm_type='l2', degree_rise=3)      
@@ -343,7 +262,7 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         devs_vec[it,:] = dif_u,dif_h
         
         t += dt
-        scalars[it,:] = diagnostics(q_f,u_f,flux_f,h_f,S,dt,t)      
+        scalars[it,:] = diagnostics(u_f,h_f,S,dt,t)      
           
         # Compute CFL condition by looking at max(u_vector/h) for each cell
         # of the mesh 
@@ -366,10 +285,8 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         if output:
             u_f.rename('u_f','u')
             h_f.rename('h_f','h')
-            q_f.rename('q_f','q')
             ufile << u_f,t
             hfile << h_f,t  
-            qfile << q_f,t
-
+            
 
     return devs_vec,scalars

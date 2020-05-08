@@ -88,7 +88,7 @@ def conv_rate(xvalues,err):
     return rate_u,rate_h
 
 # For Delaunay tesselation do not use too small numbers or the solver diverges
-N  = np.array([30])
+N  = np.array([10,20,30,40,60])
 
 
 # N for right-based and crossed triangles
@@ -123,7 +123,7 @@ space_h = 'DG'
 deg_h = 0
 
 
-test_dim = '1D'
+test_dim = '2D'
 
 space_str = space_q + str(deg_q) + space_u + str(deg_u) + space_h + str(deg_h) 
 
@@ -142,15 +142,15 @@ for i in range(n_iter):
     #mesh = generate_mesh(domain,N[i],'cgal') 
     #mesh.smooth()
     
-    
     ## Set up initial exact condition 
     u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
-
     
     ## Plot initial equidistributed mesh
     #mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
-    #mesh = Winslow_eq(mesh,N[i],u_0,h_0,monitor = 'arc-length')   
+    mesh = Winslow_eq(mesh,N[i],u_0,h_0,monitor = 'arc-length')   
     
+    ## Set up initial exact condition 
+    u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
     
     # Plot refined mesh 
     plt.figure(i)
@@ -170,7 +170,7 @@ for i in range(n_iter):
     
     # dev_sol contains devs from u_0 and h_0 in t
     # dev_scalars contains devs of Energy,Enstrophy,q,Mass in t
-    dev_sol,dev_scalars = solver(mesh,W1,W2,u_0,h_0,dt,tf,output=1,lump=0,case = test_dim)
+    dev_sol,dev_scalars = solver(mesh,W1,W2,u_0,h_0,dt,tf,output=0,lump=0,case = test_dim)
 
     dof_tot[i] = W1.dim()
     dof_u = W1.sub(0).dim()

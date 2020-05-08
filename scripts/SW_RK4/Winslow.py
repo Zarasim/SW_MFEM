@@ -44,7 +44,7 @@ def Winslow_eq(mesh,N,u,h,monitor = 'arc-length'):
     
     #w = project(0.5*(sqrt((u[0].dx(0)*u[0].dx(0) + u[1].dx(1)*u[1].dx(1))) + sqrt(h.dx(0)*h.dx(0) + h.dx(1)*h.dx(1))),W)
     beta = 1.0
-    w = project(sqrt(1 + beta*(h.dx(0)*h.dx(0) + h.dx(1)*h.dx(1))),W)
+    w = project(sqrt(1 + beta*(h.dx(0)*h.dx(0) + h.dx(1)*h.dx(1)) + beta*(u[0].dx(0)*u[0].dx(0) + u[0].dx(1)*u[0].dx(1))),W)
     
     x_D = Expression('x[0]',degree=2)
     y_D = Expression('x[1]',degree=2)
@@ -78,53 +78,7 @@ def Winslow_eq(mesh,N,u,h,monitor = 'arc-length'):
     mesh.coordinates()[:,1] = y.compute_vertex_values()
     
     return mesh
-    
-
-# plot(mesh_)
-
-# ## inradius / circumradius. A value equal to 0 indicates degenerate element
-# rad_ratio_vec = MeshQuality.radius_ratios(mesh_)
-# rad_ratio_vec = rad_ratio_vec.array()
-
-
-# weights = np.ones_like(rad_ratio_vec)/float(len(rad_ratio_vec))
-# plt.figure()
-# n, bins, patches = plt.hist(x=rad_ratio_vec,weights = weights, color='#0504aa',
-#                             alpha=0.7,rwidth=0.85)
-
-# plt.grid(axis='y', alpha=0.75)
-# plt.xlabel('r/R')
-# plt.ylabel('Frequency')
-# maxfreq = n.max()
-
-#r_min, r_max = MeshQuality.radius_ratio_min_max(mesh)
-#Q = (r_min/r_max + r_max/r_min)/2.0
-
-
-## Compute Skewness for each mesh element 
-# Grad = VectorFunctionSpace(mesh,'CG',1)
-# Q = FunctionSpace(mesh_,'DG',0)
-
-# q = Function(Q)
-# grad_x = project(grad(x),Grad)
-# grad_y = project(grad(y),Grad)
-
-
-
-# for c in cells(mesh):       
-    
-#     ## evaluate gradient at the midpoint  
-#     v1 = grad_x(c.midpoint().x(),c.midpoint().y())
-#     v2 = grad_y(c.midpoint().x(),c.midpoint().y()) 
-    
-#     Gmatrix = np.array([v1,v2])
-#     eigval,eigvec = np.linalg.eig(Gmatrix)
-#     lambda_1, lambda_2 = abs(eigval)
-#     q.vector()[c.index()] = (lambda_1/lambda_2 + lambda_2/lambda_1)/2.0
-
-# plt.figure()
-# plot(q)
-
+   
 
 
 

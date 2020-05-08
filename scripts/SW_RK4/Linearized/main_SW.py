@@ -33,8 +33,8 @@ get_ipython().magic('reset -sf')
 
 # Import modules
 from SW_RK4 import *
-from adaptive_mesh_1D import *
-from Winslow import *
+#from adaptive_mesh_1D import *
+#from Winslow import *
 from mshr import *
 from initial_fields import *
 import matplotlib.pyplot as plt
@@ -88,7 +88,7 @@ def conv_rate(xvalues,err):
     return rate_u,rate_h
 
 # For Delaunay tesselation do not use too small numbers or the solver diverges
-N  = np.array([30])
+N  = np.array([50])
 
 
 # N for right-based and crossed triangles
@@ -123,7 +123,7 @@ space_h = 'DG'
 deg_h = 0
 
 
-test_dim = '2D'
+test_dim = '1D'
 
 space_str = space_q + str(deg_q) + space_u + str(deg_u) + space_h + str(deg_h) 
 
@@ -143,18 +143,18 @@ for i in range(n_iter):
     #mesh.smooth()
     
     ## Set up initial exact condition 
-    u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
+    #u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
     
     ## Plot initial equidistributed mesh
     #mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
-    mesh = Winslow_eq(mesh,u_0,h_0,monitor = 'arc-length')   
+    #mesh = Winslow_eq(mesh,N[i],u_0,h_0,monitor = 'arc-length')   
     
     ## Set up initial exact condition 
     u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
     
     # Plot refined mesh 
-    #plt.figure(i)
-    #plot(mesh)
+    plt.figure(i)
+    plot(mesh)
              
     E = FiniteElement(space_q,mesh.ufl_cell(),deg_q)
     U = FiniteElement(space_u,mesh.ufl_cell(),deg_u)
@@ -170,7 +170,7 @@ for i in range(n_iter):
     
     # dev_sol contains devs from u_0 and h_0 in t
     # dev_scalars contains devs of Energy,Enstrophy,q,Mass in t
-    dev_sol,dev_scalars = solver(mesh,W1,W2,u_0,h_0,dt,tf,output=1,lump=0,case = test_dim)
+    dev_sol,dev_scalars = solver(mesh,W1,W2,u_0,h_0,dt,tf,output=0,lump=0,case = test_dim)
 
     dof_tot[i] = W1.dim()
     dof_u = W1.sub(0).dim()
@@ -224,31 +224,31 @@ for i in range(dev_scalars.shape[1]):
     scalars_norm[:,i] = (dev_scalars[:,i] - dev_scalars[0,i])/dev_scalars[0,i]
 
    
-# Plot Scalar quantities and check for convergence
+ # Plot Scalar quantities and check for convergence
 fig = plt.figure()
 plt.subplot(2,2,1)
 plt.plot(t_vec,scalars_norm[:,0])
 plt.ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-plt.title('Energy')
+plt.title('Potential Energy')
 plt.ylabel('$(E - E_{0})/E_{0}$')
 plt.xlabel('t')
 plt.subplot(2,2,2)
 plt.plot(t_vec,scalars_norm[:,1])
 plt.ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-plt.title('Enstrophy')
+plt.title('Kinetic Energy')
 plt.xlabel('t')
-plt.ylabel('$(Q - Q_{0})/Q_{0}$')
+plt.ylabel('$(E - E_{0})/E_{0}$')
 plt.subplot(2,2,3)
 plt.plot(t_vec,scalars_norm[:,2])
 plt.ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-plt.title('Absolute vorticity')
-plt.ylabel('$(q - q_{0})/q_{0}$')
+plt.title('Mass')
+plt.ylabel('$(m - m_{0})/m_{0}$')
 plt.xlabel('t')
 plt.subplot(2,2,4)
 plt.plot(t_vec,scalars_norm[:,3])
 plt.ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-plt.title('Mass')
-plt.ylabel('$(m - m_{0})/m_{0}$')
+plt.title('E_tot')
+plt.ylabel('$(E - E_{0})/E_{0}$')
 plt.xlabel('t')
 fig.tight_layout()
 plt.savefig('scalars')
