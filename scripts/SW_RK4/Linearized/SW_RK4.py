@@ -20,22 +20,19 @@ import matplotlib.pyplot as plt
 def diagnostics(u,h,S,dt,t):
 
     g = Constant(10.0)  # gravity
-    #vort_mid = (vort0 + vort)/2
-    #u_mid = (u0 + u)/2
-    #h_mid = (h0 + h)/2
     
     S1,S2,S3 = split(S)
+    
     # Energy
-    E_kin = assemble(h*inner(u,u)*dx)
+    E_kin = assemble(h*(u[0]*u[0] + u[1]*u[1])*dx)
     E_pot = assemble(g*h*h*dx)
     
-    #E = assemble(0.5*(h*inner(u,u) + g*h**2)*dx) - assemble(0.5*(h0*inner(u0,u0) + g*h0**2)*dx)- dt*(assemble(h*(u_mid[0]*S1 + u_mid[1]*S2)*dx) + assemble(S3*(0.5*inner(u_mid,u_mid) + g*h_mid)*dx))
-              
     # Mass
-    M = assemble(h*dx) #- t*assemble(S3*dx)
+    M = assemble(h*dx)
     
-    E =  assemble(0.5*(h*inner(u,u) + g*h*h)*dx)
-
+    #E =  assemble(0.5*(h*(u[0]*u[0] + u[1]*u[1]) + g*h*h)*dx)
+    E = E_kin + E_pot
+    
     return E_pot,E_kin,M,E
 
 
@@ -68,6 +65,8 @@ def weak_form(sol_old,sol_test,S,dt):
     
    g = Constant(10.0)
    f = Constant(10.0)
+   #0.01
+   #50.0*2*pi
    H = Constant(10.0)
    
    u_old,h_old = split(sol_old)               # Function
@@ -115,7 +114,7 @@ def weak_form(sol_old,sol_test,S,dt):
    return L
 
 
-def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
+def solver(mesh,W,u_0,h_0,dt,tf,output,lump,case):
     
     "Define the problem with initial condition"
     
@@ -123,31 +122,31 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
  
    
     # Trial functions
-    sol = TrialFunction(W1)
-    diag_trial = TrialFunction(W2)
-    
+    sol = TrialFunction(W)
+   
     # Test functions
-    sol_test = TestFunction(W1)
-    diag_test = TestFunction(W2)
+    sol_test = TestFunction(W)
     
     # Define initial conditions  
-    sol_old = Function(W1)
-    diag_old = Function(W2)
+    sol_old = Function(W)
     
     
-    Z = FiniteElement('CG',mesh.ufl_cell(),4)
-    W_elem = MixedElement([Z,Z,Z])
-    Z = FunctionSpace(mesh,W_elem)
+   
     
     ## Source term 
+    S_elem = FiniteElement('CG',mesh.ufl_cell(),4)
+    W_elem = MixedElement([S_elem,S_elem,S_elem])
+    Z = FunctionSpace(mesh,W_elem)
     S = Function(Z)   
            
     
     ## 1D case
     
     if case == '1D':
-        expr = Expression(('sin(2.00000*pi*x[1])','0.0000000',
-                       '10.0000 + 1.0000/(2.00000*pi)*cos(2.0000*pi*x[1])'),element = W1.ufl_element())
+        
+        print('1D')
+        expr = Expression(('sin(2.00000*pi*x[1])/1000','0.0000000',
+                       '10.0000 + 1.0000/(2.00000*pi*1000)*cos(2.0000*pi*x[1])'),element = W.ufl_element())
         
         
         # expr_u = Expression(('sin(4.0*pi*x[1])','0.0'),element = CG_u.ufl_element())
@@ -158,9 +157,10 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         # Source term for 1D case 
         S_exp = Expression(('0.0','0.0','0.0'),degree=4)  
     
+   
     else:
         
-        expr = Expression(('sin(pi*x[1])','0.0000000','10.000 + sin(2*pi*x[0])*sin(2*pi*x[1])'),element = W1.ufl_element())
+        expr = Expression(('sin(pi*x[1])','0.0000000','10.000 + sin(2*pi*x[0])*sin(2*pi*x[1])'),element = W.ufl_element())
     
      
         # expr_u = Expression(('sin(pi*x[1])','0.00000'),element = CG_u.ufl_element())
@@ -172,11 +172,7 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
                         '2*pi*cos(2*pi*x[0])*sin(pi*x[1])*sin(2*pi*x[1])'),degree=4)
    
     
-    
-    #expr = MyExpression(sigma = 0.01,xa = 0.4 ,xb = 0.6,yc = 0.5,element = W1.ufl_element())
     sol_old.interpolate(expr)
-    
-    #S_exp = Expression(('0.0','0.0','0.0'),degree=4)  
     S.interpolate(S_exp)
 
     
@@ -186,18 +182,18 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
     
     'Implementation of the Runge-Kutta method'
     
-    sol_n = Function(W1)
+    sol_n = Function(W)
     
-    k1 = Function(W1)     
-    k2 = Function(W1)
-    k3 = Function(W1) 
-    k4 = Function(W1)
+    k1 = Function(W)     
+    k2 = Function(W)
+    k3 = Function(W) 
+    k4 = Function(W)
    
     
     scalars = np.zeros(4*(nt+1)).reshape(nt+1,4)
     devs_vec = np.zeros(2*(nt+1)).reshape(nt+1,2) 
+    sol_vec = np.zeros(3*(nt+1)).reshape(nt+1,3) 
     
-    #u_f,h_f = sol_old.split(deepcopy = True)
     # Assemble mass matrix once before starting iterations
     a = 0
     
@@ -212,6 +208,7 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
     
     A = assemble(a)
     
+    Proj_space = FunctionSpace(mesh,'CG',2)
     
     if output:
         print('Writing in pvd file')
@@ -256,10 +253,23 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         
         u_f,h_f = sol_old.split(deepcopy = True)
         
+        
+        ## Look at the oscillations in one single point over time for u,v and h
+        # separately
+            
         dif_u = errornorm(u_0,u_f,norm_type='l2', degree_rise=3)
         dif_h = errornorm(h_0,h_f,norm_type='l2', degree_rise=3)      
         
         devs_vec[it,:] = dif_u,dif_h
+        
+        
+        ## For u defined in RT/BDM cannot extract directly components
+        # project in piecewise linear function 
+        u_fixed = project(u_f[0],Proj_space).vector()[30]
+        v_fixed = project(u_f[1],Proj_space).vector()[30]
+        h_fixed = h_f.vector()[30]
+        
+        sol_vec[it,:] = u_fixed,v_fixed,h_fixed  
         
         t += dt
         scalars[it,:] = diagnostics(u_f,h_f,S,dt,t)      
@@ -274,7 +284,7 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
             
         
         # Move to next time step
-        if dif_u > 1.0 or dif_h > 1.0: 
+        if dif_u > 10.0 or dif_h > 10.0: 
             
             Warning('The RK scheme diverges')
             print('Solver diverges')
@@ -289,4 +299,4 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
             hfile << h_f,t  
             
 
-    return devs_vec,scalars
+    return sol_vec,devs_vec,scalars
