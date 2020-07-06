@@ -22,7 +22,6 @@ form_compiler_parameters = {"quadrature_degree": 6}
 def diagnostics(vort,u,flux,h,vort_0,u_0,flux_0,h_0):
 
     g = Constant(10.0)  # gravity
-    f = Constant(10.0)  # Coriolis term
     
     u = (u + u_0)/2.0
     h = (h + h_0)/2.0
@@ -72,7 +71,7 @@ def weak_form(u_test,u_old,u,flux_test,flux,vort_test,vort_old,vort,h_test,
     F = 0
     
     g = Constant(10.0) 
-    f = Constant(10.0)
+    f = Constant(50*2*pi)
     
     # weight u and h by theta to obtain a time-stepping method
     u_mid = (1.0-theta)*u_old + theta*u
@@ -137,9 +136,9 @@ def solver(mesh,W,dt,tf,output = None,lump = None):
 
     # Define initial conditions
     expr = Expression(('0.0',
-                    'sin(4.0*pi*x[1])','0.0',
+                    'sin(4.0*pi*x[1])/10','0.0',
                     '0.0','0.0',
-                    '10.0 + (1/(4.0*pi))*cos(4.0*pi*x[1])'),element = W.ufl_element())
+                    '10.0 + (1/(4.0*pi*10))*cos(4.0*pi*x[1])'),element = W.ufl_element())
     
     sol_old.interpolate(expr)
 
@@ -148,8 +147,8 @@ def solver(mesh,W,dt,tf,output = None,lump = None):
     CG_h = FunctionSpace(mesh,'CG',2)
     u_0 = Function(CG_u)
     h_0 = Function(CG_h)
-    expr_u = Expression(('sin(4.0*pi*x[1])','0.0'),element = CG_u.ufl_element())
-    expr_h = Expression('10.0 + 1.0/(4.0*pi)*cos(4.0*pi*x[1])',element = CG_h.ufl_element())
+    expr_u = Expression(('sin(4.0*pi*x[1])/10','0.0'),element = CG_u.ufl_element())
+    expr_h = Expression('10.0 + (1/(4.0*pi*10))*cos(4.0*pi*x[1])',element = CG_h.ufl_element())
     
     
     ## 2D case

@@ -44,6 +44,9 @@ class MyExpression(UserExpression):
         return (3,)
 
 
+form_compiler_parameters = {"quadrature_degree": 6}
+
+
 def diagnostics(vort,u,flux,h,S,dt,t):
 
     g = Constant(10.0)  # gravity
@@ -99,7 +102,7 @@ def diagnostic_vars(sol_old,sol_test,diag_test,diag_trial,diag_old):
    a = 0
    L = 0
     
-   f = Constant(10.0)
+   f = Constant(50.0*2*pi)
     
    u_old,h_old = split(sol_old)
 
@@ -220,7 +223,7 @@ def solver(mesh,W1,W2,u_0,h_0,dt,tf,output,lump,case):
         expr = Expression(('sin(4.0*pi*x[1])/1000','0.0',
                        '10.0 + 1.0/(4.0*pi*1000)*cos(4.0*pi*x[1])'),element = W1.ufl_element())
         
-        
+        print('1D')
         # expr_u = Expression(('sin(4.0*pi*x[1])','0.0'),element = CG_u.ufl_element())
         # expr_h = Expression('10.0 + 1.0/(4.0*pi)*cos(4.0*pi*x[1])',element = CG_h.ufl_element())
         

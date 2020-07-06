@@ -34,7 +34,7 @@ get_ipython().magic('reset -sf')
 
 
 # Import modules
-from SW_RK4 import *
+from SW_Adams_Bashforth import *
 from adaptive_mesh_1D import *
 from mshr import *
 from initial_fields import *
@@ -99,7 +99,7 @@ def conv_rate(dof,err):
 
     return rate
 
-N  = np.array([30])
+N  = np.array([20])
 # 10,20,30,40,50
 
 # N for unstructured mesh
@@ -112,6 +112,8 @@ err_sol = np.zeros(2*n_iter).reshape(n_iter,2)
 dof = np.zeros(2*n_iter).reshape(n_iter,2)
 dof_tot = np.zeros(n_iter)
 
+## Runge-Kutta 4 is more stable then a 3rd order multistep Ad-Bas method
+## 0.0003 time step Ad-Bas while RK4 arrives to 0.001 for f = 10
 
 dt = 0.001
 tf = 0.1
@@ -157,7 +159,7 @@ for i in range(n_iter):
     #plot(mesh)
     
     ## Set up initial exact condition 
-    u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
+    u_g,h_g = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
    
    
     ## Create FE spaces          
@@ -171,7 +173,7 @@ for i in range(n_iter):
     
     # dev_sol contains solution u_0 and h_0 
     # dev_scalars contains devs of Energy,Enstrophy,q,Mass in t
-    sol,dev_sol,dev_scalars = solver(mesh,W,u_0,h_0,dt,tf,output=0,lump=0,case = test_dim)
+    sol,dev_sol,dev_scalars = solver(mesh,W,u_g,h_g,dt,tf,output=0,lump=0,case = test_dim)
 
     
     dof_tot[i] = W.dim()
@@ -223,9 +225,9 @@ plt.savefig('h')
 
 
 # Compute Fourier transform of the quantities 
-Fourier_trans(dt,sol[:,0])
-Fourier_trans(dt,sol[:,1])
-Fourier_trans(dt,sol[:,2])
+#Fourier_trans(dt,sol[:,0])
+#Fourier_trans(dt,sol[:,1])
+#ourier_trans(dt,sol[:,2])
 
 
 

@@ -22,8 +22,8 @@ def initial_fields(mesh,space_u,space_h,deg_u,deg_h,case):
     
     if case == '1D':
         
-        expr_u = Expression(('sin(4.0*pi*x[1])/1000','0.000000'),element = CG_u.ufl_element())
-        expr_h = Expression('10.0 + 1.0/(4.0*pi*1000)*cos(4.0*pi*x[1])',element = CG_h.ufl_element())
+        expr_u = Expression(('sin(2.0*pi*x[1])/1000','0.000000'),element = CG_u.ufl_element())
+        expr_h = Expression('10.0 + 1.0/(2.0*pi*1000)*cos(2.0*pi*x[1])',element = CG_h.ufl_element())
         
     else:
     

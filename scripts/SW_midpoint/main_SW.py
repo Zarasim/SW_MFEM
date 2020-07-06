@@ -137,8 +137,8 @@ alpha = 10
 source_dx_str = 'np.sqrt((4*pi*np.cos(4*pi*x))**2 + (np.sin(4*pi*x))**2)'
 #'4*pi*np.cos(4*pi*x)'
 
-dt = 0.0005
-tf = 0.1
+dt = 0.01
+tf = 50.0
 nt = np.int(tf/dt)
 
 t_vec = np.arange(1,nt+2)*dt
@@ -166,9 +166,9 @@ for i in range(n_iter):
     plt.figure(i)
     plot(mesh)
     
-    E = FiniteElement('CG',mesh.ufl_cell(),2)
+    E = FiniteElement('CG',mesh.ufl_cell(),1)
 
-    U = FiniteElement('BDM',mesh.ufl_cell(),1)
+    U = FiniteElement('RT',mesh.ufl_cell(),1)
 
     H = FiniteElement('DG',mesh.ufl_cell(),0)
 

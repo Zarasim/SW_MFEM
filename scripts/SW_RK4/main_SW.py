@@ -88,9 +88,9 @@ def conv_rate(xvalues,err):
     return rate_u,rate_h
 
 # For Delaunay tesselation do not use too small numbers or the solver diverges
-N  = np.array([10,20,30,40,60])
+N  = np.array([20])
 
-
+# 10,20,30,40,60]
 # N for right-based and crossed triangles
 # 10,20,30,40,60
 # N for unstructured mesh
@@ -109,21 +109,21 @@ dof_tot = np.zeros(n_iter)
 n_equid_iter = 5
 alpha = 15
 
-dt = 0.0005
-tf = 0.1
+dt = 0.005
+tf = 0.2
 nt = np.int(tf/dt)
 
 t_vec = np.arange(1,nt+2)*dt
 
 space_q = 'CG'
-deg_q = 2
-space_u = 'BDM'
+deg_q = 1
+space_u = 'RT'
 deg_u = 1
 space_h = 'DG'
 deg_h = 0
 
 
-test_dim = '2D'
+test_dim = '1D'
 
 space_str = space_q + str(deg_q) + space_u + str(deg_u) + space_h + str(deg_h) 
 
@@ -143,11 +143,11 @@ for i in range(n_iter):
     #mesh.smooth()
     
     ## Set up initial exact condition 
-    u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
+    #u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)
     
     ## Plot initial equidistributed mesh
     #mesh = equid_mesh(N[i],mesh,source_dx_str,alpha,n_equid_iter,arc_length=1)
-    mesh = Winslow_eq(mesh,N[i],u_0,h_0,monitor = 'arc-length')   
+    #mesh = Winslow_eq(mesh,N[i],u_0,h_0,monitor = 'arc-length')   
     
     ## Set up initial exact condition 
     u_0,h_0 = initial_fields(mesh,space_u,space_h,deg_u,deg_h,test_dim)

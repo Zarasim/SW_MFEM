@@ -24,14 +24,14 @@ def diagnostics(u,h,S,dt,t):
     S1,S2,S3 = split(S)
     
     # Energy
-    E_kin = assemble(h*(u[0]*u[0] + u[1]*u[1])*dx)
+    E_kin = assemble(h*inner(u,u)*dx)
     E_pot = assemble(g*h*h*dx)
     
     # Mass
     M = assemble(h*dx)
     
     #E =  assemble(0.5*(h*(u[0]*u[0] + u[1]*u[1]) + g*h*h)*dx)
-    E = E_kin + E_pot
+    E = 0.5*(E_kin + E_pot)
     
     return E_pot,E_kin,M,E
 
@@ -56,7 +56,6 @@ def lumping(a):
     return A
 
 
-    
 
 
 def weak_form(sol_old,sol_test,S,dt):
@@ -64,7 +63,7 @@ def weak_form(sol_old,sol_test,S,dt):
    "weak form of Shallow Water equations in vector-invariant form"
     
    g = Constant(10.0)
-   f = Constant(100.0*2*pi)
+   f = Constant(10.0)
    #0.01
    #50.0*2*pi
    H = Constant(10.0)
@@ -86,35 +85,19 @@ def weak_form(sol_old,sol_test,S,dt):
    C_momentum = dt*g*div(u_test)*h_old*dx
    
    
-   # Source term 
-   #S_momentum = dt*(u_test[0]*S1 + u_test[1]*S2)*dx
-   
-   
-   # Anticipated potential vorticity
-   # This removes inertia-gravity waves so that we can apply our moving mesh
-   # strategy
-   
-   #tau = dt/2.0
-   # 1st component of Q
-   #Q_momentum =  + tau*(u_old[0]*(vort_old.dx(0)*flux_old[0] + vort_old*flux_old[0].dx(0)) \
-   #                    + u_old[1]*(vort_old.dx(1)*flux_old[0] + vort_old*flux_old[0].dx(1)))*u_test[1]*dx \
-   #             - tau*(u_old[0]*(vort_old.dx(0)*flux_old[1] + vort_old*flux_old[1].dx(0)) \
-   #                    + u_old[1]*(vort_old.dx(1)*flux_old[1] + vort_old*flux_old[1].dx(1)))*u_test[0]*dx
-   
-   
-   L += C_momentum + A_momentum  #+ Q_momentum  #S_momentum
+   L += C_momentum + A_momentum #+ inner(u_test,u_old)*dx
     
    #### Continuity equation #### 
 
     
    rhs_continuity = -dt*H*h_test*div(u_old)*dx
-   L += rhs_continuity
+   L += rhs_continuity #+ h_test*h_old*dx
 
     
    return L
 
 
-def solver(mesh,W,u_0,h_0,dt,tf,output,lump,case):
+def solver(mesh,W,u_g,h_g,dt,tf,output,lump,case):
     
     "Define the problem with initial condition"
     
@@ -128,10 +111,8 @@ def solver(mesh,W,u_0,h_0,dt,tf,output,lump,case):
     sol_test = TestFunction(W)
     
     # Define initial conditions  
-    sol_old = Function(W)
+    sol_n = Function(W)
     
-    
-   
     
     ## Source term 
     S_elem = FiniteElement('CG',mesh.ufl_cell(),4)
@@ -172,23 +153,15 @@ def solver(mesh,W,u_0,h_0,dt,tf,output,lump,case):
                         '2*pi*cos(2*pi*x[0])*sin(pi*x[1])*sin(2*pi*x[1])'),degree=4)
    
     
-    sol_old.interpolate(expr)
+    sol_n.interpolate(expr)
     S.interpolate(S_exp)
-
+    
     
     t = 0.0
     nt = int(tf/dt) 
     it = 0 
     
-    'Implementation of the Runge-Kutta method'
-    
-    sol_n = Function(W)
-    
-    k1 = Function(W)     
-    k2 = Function(W)
-    k3 = Function(W) 
-    k4 = Function(W)
-   
+    'Implementation of the explicit multistep Adams-Bashforth method'
     
     scalars = np.zeros(4*(nt+1)).reshape(nt+1,4)
     devs_vec = np.zeros(2*(nt+1)).reshape(nt+1,2) 
@@ -207,61 +180,87 @@ def solver(mesh,W,u_0,h_0,dt,tf,output,lump,case):
     a += lhs_continuity
     
     A = assemble(a)
-    
     Proj_space = FunctionSpace(mesh,'CG',2)
     
     if output:
         print('Writing in pvd file')
         ufile = File('SW_paraview/sw_test_u.pvd')
         hfile = File('SW_paraview/sw_test_h.pvd')
-        u_0.rename('u_0','u')
-        h_0.rename('h_0','h')
-        ufile << u_0,t
-        hfile << h_0,t
-          
+        u_g.rename('u_g','u')
+        h_g.rename('h_g','h')
+        ufile << u_g,t
+        hfile << h_g,t
         
-    while(it <= nt):    
-
-        sol_n = sol_old.copy(deepcopy = True)
-
+           
+    sol_n1 = Function(W)     
+    sol_n2 = Function(W)     
+    sol_n3 = Function(W)     
+    sol_n4 = Function(W)     
+    
+    f_n = Function(W)     
+    f_n1 = Function(W)     
+    f_n2 = Function(W)     
+    f_n3 = Function(W)     
+    
+    while(it <= nt):        
         
-        L = weak_form(sol_old,sol_test,S,dt)    
-   
-        b = assemble(L)
-        solve(A,k1.vector(),b)
-        sol_old.assign(sol_n + 0.5*k1)      
+        # sol at current time step is sol_n
+        # sol at n+1 is given by euler at first iteration 
         
-   
-        L = weak_form(sol_old,sol_test,S,dt)       
-        
-        b = assemble(L)
-        solve(A,k2.vector(),b)
-        sol_old.assign(sol_n + 0.5*k2)
-        
-       
-        L = weak_form(sol_old,sol_test,S,dt)  
-        
-        b = assemble(L)
-        solve(A,k3.vector(),b)
-        sol_old.assign(sol_n + k3)
-        
-
-        L = weak_form(sol_old,sol_test,S,dt)  
-        b = assemble(L)
-        solve(A,k4.vector(),b)
-        sol_old.assign(sol_n + 1/6*(k1 + 2*k2 + 2*k3 + k4))
-        
-        u_f,h_f = sol_old.split(deepcopy = True)
-        
-        
-        ## Look at the oscillations in one single point over time for u,v and h
-        # separately
+        if it == 0:
+            L = weak_form(sol_n,sol_test,S,dt)    
+            b = assemble(L)
+            solve(A,f_n.vector(),b)
+            sol_n1.assign(f_n + sol_n)
             
-        dif_u = errornorm(u_0,u_f,norm_type='l2', degree_rise=3)
-        dif_h = errornorm(h_0,h_f,norm_type='l2', degree_rise=3)      
+            u_f,h_f = sol_n1.split()
+            
         
+        elif it == 1:
+            
+            L = weak_form(sol_n1,sol_test,S,dt)       
+            b = assemble(L)
+            solve(A,f_n1.vector(),b)
+            
+            # y_n+2 = y_n+1 + 3/2*f(y_n+1) - 1/2*f(y_n)
+            sol_n2.assign(sol_n1 + (3.0/2.0)*f_n1 - 0.5*f_n)
+            
+            
+            u_f,h_f = sol_n2.split()
+            
+        elif it ==2:
+                        
+            L = weak_form(sol_n2,sol_test,S,dt)       
+            b = assemble(L)
+            solve(A,f_n2.vector(),b)
+            
+            # y_n+3 = y_n+2 + 23/12*h*f(y_n+2) - 16/12*f(y_n+1) + 5/12*f(y_n)
+            sol_n3.assign(sol_n2 + (23.0/12.0)*f_n2 - (16.0/12.0)*f_n1 + (5.0/12.0)*f_n)
+            
+           
+            u_f,h_f = sol_n3.split()
+            
+        else:
+                        
+            L = weak_form(sol_n3,sol_test,S,dt)       
+            b = assemble(L)
+            solve(A,f_n3.vector(),b)
+            
+            # y_n+4 = y_n+3 + 55/24*h*f(y_n+3) - 59/24*f(y_n+2) + 37/24*f(y_n+1) - 9.0/24.0*f(y_n)
+            sol_n4.assign(sol_n3 + (55.0/24.0)*f_n3 - (59.0/24.0)*f_n2 + (37.0/24.0)*f_n1 - (9.0/24.0)*f_n)
+            
+            # y_n2 -> y_n1  y_n1 -> y_n
+            f_n.assign(f_n1)
+            f_n1.assign(f_n2)
+            f_n2.assign(f_n3)
+            
+            sol_n3.assign(sol_n4)
+
+            u_f,h_f = sol_n4.split()
+            
+        dif_u = errornorm(u_g,u_f,norm_type='l2', degree_rise=3)
+        dif_h = errornorm(h_g,h_f,norm_type='l2', degree_rise=3)       
         devs_vec[it,:] = dif_u,dif_h
-        
         
         ## For u defined in RT/BDM cannot extract directly components
         # project in piecewise linear function 
@@ -278,13 +277,14 @@ def solver(mesh,W,u_0,h_0,dt,tf,output,lump,case):
         # of the mesh 
         max_u = max(u_f.vector()[:])
         cfl = (max_u)*dt/mesh.hmin()
-        
+    
+    
         if cfl > 1.0:
             print('cfl condition is not satisfied')
             
         
         # Move to next time step
-        if dif_u > 10.0 or dif_h > 10.0: 
+        if dif_u > 100.0 or dif_h > 100.0: 
             
             Warning('The RK scheme diverges')
             print('Solver diverges')
