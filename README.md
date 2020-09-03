@@ -1,4 +1,4 @@
-# SW_RK4
+# Solution of nonlinear 2D shallow Water equations with the Mixed Finite Element method
 
 Steady State Solution of 2D nonlinerar RSWs using Mixed Finite Element (MFE) method and Runge-Kutta 4 (RK4) scheme.
 
