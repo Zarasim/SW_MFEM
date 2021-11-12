@@ -4,14 +4,6 @@ Steady State Solution of 2D nonlinerar RSWs using Mixed Finite Element (MFE) met
 
 We aim to solve the system of equations for the velocity field U = (u,v) and the height field D on a unit square domain with periodic boundary conditions.
 
-u_t +  u*u_x + v*u_y - f*v + g*D_x = 0
-
-
-v_t +  u*v_x + v*v_y + f*u + g*D_y = 0
-
-
-D_t +  div(U*D) = 0
-
 The nonlinear system is rewritten in vector invariant solve in order to ensure conservation of absolute vorticity and enstrophy. In the f-plane we can obtain local conservation of potential vorticity q.
 
 
@@ -26,10 +18,6 @@ Based on the choice of the Finite Element Spaces, the discrete solution can be p
 
 It is known that RT spaces on triangles have a surplus of pressure degrees of freedom (DOFs) and consequently have
 spurious inertia–gravity modes. Infact the velocity space RT1 has 1.5 DOFs, while the height field space DG0 has dimension 1.0. On the other hand, BDM spaces for velocity have a deﬁcit of pressure DOFs and consequently the solution is polluted by spurious Rossby modes.
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 
 
 Refinement strategy:
@@ -51,6 +39,3 @@ In the problem we are examining, we exploit the invariance of the solution along
 
 
 If a-priori knowledge of the exact solution is used in the monitor function, the equidistributing mesh is only computed at the initial iteration. If the residual is used to evaluate the monitor function, then the mesh coordinates change at every time step and interpolation of the old solution onto the new mesh is required. This step might rise issues if we want to ensure conservation of Mass, Absolute Vorticity, Energy, Enstrophy.
-
-
-Add new line
